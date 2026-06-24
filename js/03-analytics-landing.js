@@ -553,6 +553,11 @@ function renderLogin(){
     </div></div>
   </div>`;
 }
+function renderSignup(){
+  if(Session.user){location.hash=homeRouteFor(Session.effectiveUser.role);return;}
+  renderLogin();
+  setTimeout(()=>openOnboarding(),0);
+}
 function fillLogin(e,p){$('#lg_email').value=e;$('#lg_pass').value=p;doLogin();}
 function doLogin(){
   const email=$('#lg_email').value.trim(),pass=$('#lg_pass').value;

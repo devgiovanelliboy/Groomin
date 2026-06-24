@@ -7,7 +7,7 @@
     (location.protocol==='https:' || ['localhost','127.0.0.1','[::1]'].includes(location.hostname));
   if(canSW){
     window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('sw.js').then(reg=>{
+      navigator.serviceWorker.register('/sw.js').then(reg=>{
         reg.addEventListener('updatefound',()=>{
           const nw=reg.installing;if(!nw)return;
           nw.addEventListener('statechange',()=>{

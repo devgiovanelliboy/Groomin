@@ -32,6 +32,6 @@ window.refreshShell=function(){Router.render();};
 window.DB=DB;window.Session=Session;window.Router=Router;window.can=can;
 window.shopAnalytics=shopAnalytics;window.platformAnalytics=platformAnalytics;window.customerStats=customerStats;
 
-// initial route
-if(!location.hash)location.hash='#/';
+// Em /app/ o ponto de entrada é o login; a landing pública mora em /.
+if(!location.hash)location.hash=location.pathname.startsWith('/app')?'#/login':'#/';
 Router.render();

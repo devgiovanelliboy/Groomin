@@ -4,7 +4,7 @@
   "description": "Plataforma completa de gestão para barbearias: agenda, CRM, PDV, estoque, financeiro, marketing e IA.",
   "lang": "pt-BR",
   "dir": "ltr",
-  "start_url": "./index.html",
+  "start_url": "/app/",
   "scope": "./",
   "id": "/",
   "display": "standalone",
@@ -31,13 +31,13 @@
     {
       "name": "Entrar / Painel",
       "short_name": "Entrar",
-      "url": "./index.html#/login",
+      "url": "/app/#/login",
       "description": "Acessar o painel de gestão"
     },
     {
       "name": "PDV / Caixa",
       "short_name": "PDV",
-      "url": "./index.html#/dashboard/pdv",
+      "url": "/app/#/dashboard/pdv",
       "description": "Abrir o ponto de venda"
     }
   ]

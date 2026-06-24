@@ -291,7 +291,7 @@ function currentShop(){
 /* ============================================================
    ROUTER (hash-based) with role-based redirects
    ============================================================ */
-const RESERVED=['login','admin','dashboard','my-schedule','my-appointments','find-barbershops','b'];
+const RESERVED=['login','signup','admin','dashboard','my-schedule','my-appointments','find-barbershops','b'];
 const Router={
   parse(){
     let h=location.hash.replace(/^#\/?/,'');
@@ -299,6 +299,7 @@ const Router={
     if(seg.length===0)return {route:'landing'};
     const first=seg[0];
     if(first==='login')return {route:'login'};
+    if(first==='signup')return {route:'signup'};
     if(first==='admin')return {route:'admin',sub:seg[1]};
     if(first==='dashboard')return {route:'dashboard',sub:seg[1]};
     if(first==='my-schedule')return {route:'my-schedule',sub:seg[1]};
@@ -317,7 +318,7 @@ const Router={
     if(r.route==='dashboard'&&!can('view_dashboard')){return needAuth('#/dashboard');}
     if(r.route==='my-schedule'&&!(u&&u.role==='barber')){return needAuth('#/my-schedule');}
     if(r.route==='my-appointments'&&!(u&&u.role==='customer')){return needAuth('#/my-appointments');}
-    const map={landing:'renderLanding',login:'renderLogin',admin:'renderAdmin',dashboard:'renderDashboard','my-schedule':'renderBarber','my-appointments':'renderCustomer',public:'renderPublic',marketplace:'renderMarketplace'};
+    const map={landing:'renderLanding',login:'renderLogin',signup:'renderSignup',admin:'renderAdmin',dashboard:'renderDashboard','my-schedule':'renderBarber','my-appointments':'renderCustomer',public:'renderPublic',marketplace:'renderMarketplace'};
     const fn=window[map[r.route]];
     if(typeof fn==='function')fn(r);
     else $('#root').innerHTML=`<div class="container" style="padding:80px 0;text-align:center"><h2>Carregando…</h2></div>`;

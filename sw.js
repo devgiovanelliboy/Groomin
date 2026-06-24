@@ -2,10 +2,11 @@
    Estratégia: precache do app shell + stale-while-revalidate para o resto
    (inclui CDNs de fonte e Chart.js, cacheados na primeira visita online).
 */
-const VERSION = 'barberos-v3';
+const VERSION = 'barberos-v4';
 const APP_SHELL = [
   './',
   './index.html',
+  './app/index.html',
   './styles.css',
   './manifest.webmanifest',
   './icon.svg',
@@ -51,10 +52,11 @@ self.addEventListener('fetch', (event) => {
   // Não interceptar esquemas não-http (ex.: chrome-extension)
   if (!url.protocol.startsWith('http')) return;
 
-  // Navegações (SPA por hash): sempre cair no index.html quando offline
+  // Navegações: a landing e o app têm shells próprios quando estiver offline.
   if (req.mode === 'navigate') {
+    const shell = url.pathname === '/app' || url.pathname.startsWith('/app/') ? './app/index.html' : './index.html';
     event.respondWith(
-      fetch(req).catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
+      fetch(req).catch(() => caches.match(shell).then((r) => r || caches.match('./')))
     );
     return;
   }
