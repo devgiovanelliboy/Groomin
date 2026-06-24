@@ -207,7 +207,7 @@
     const apptPayload = {
       tenantId: tid, barbershopId: tid, customerId, customerName: p.name, phone: p.phone,
       serviceId: p.serviceId, barberId: p.barberId, date: p.date, time: p.time,
-      duration: p.duration || 30, status: "confirmado", price: p.price || 0, source: "public", createdAt: Date.now(),
+      duration: p.duration || 30, status: "pendente", price: p.price || 0, source: "public", createdAt: Date.now(),
     };
     const aRef = await addDoc(collection(FB.db, "tenants", tid, "appointments"), apptPayload);
     // Hidrata cache local imediatamente — o onSnapshot do cliente é bloqueado por regras

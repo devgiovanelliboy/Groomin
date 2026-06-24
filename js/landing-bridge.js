@@ -1,7 +1,14 @@
 /* Landing pública: mantém a apresentação isolada da aplicação em /app/. */
 (function () {
   const appUrl = (hash) => '/app/' + (hash || '');
+  const publicMatch = location.pathname.match(/^\/b\/([a-z0-9-]+)\/?$/i);
   const legacyHash = location.hash;
+
+  // Link público compartilhável: /b/nome-da-barbearia.
+  if (publicMatch) {
+    location.replace(appUrl('#/b/' + encodeURIComponent(publicMatch[1])));
+    return;
+  }
 
   // URLs compartilhadas da versão anterior continuam válidas.
   if (legacyHash && legacyHash !== '#/' && legacyHash !== '#') {

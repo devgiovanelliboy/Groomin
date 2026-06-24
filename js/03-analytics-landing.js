@@ -5,7 +5,8 @@ function shopAnalytics(shopId){
   const t=DB.todayISO();
   const appts=DB.scope('appointments',shopId);
   const valid=a=>a.status!=='cancelado';
-  const paid=a=>a.status==='concluido'||a.status==='confirmado';
+  // Receita só existe após o atendimento ser concluído; confirmado é apenas reserva.
+  const paid=a=>a.status==='concluido';
   const today=appts.filter(a=>a.date===t&&valid(a));
   const revToday=appts.filter(a=>a.date===t&&paid(a)).reduce((s,a)=>s+a.price,0);
   const month=t.slice(0,7);
@@ -15,9 +16,9 @@ function shopAnalytics(shopId){
   const returning=customers.filter(c=>appts.filter(a=>a.customerId===c.id&&valid(a)).length>1).length;
   const byStatus={confirmado:0,pendente:0,concluido:0,cancelado:0};
   appts.forEach(a=>byStatus[a.status]!=null&&byStatus[a.status]++);
-  const svcCount={};appts.filter(valid).forEach(a=>{const s=DB.find('services',a.serviceId);if(s)svcCount[s.name]=(svcCount[s.name]||0)+1;});
+  const svcCount={};appts.filter(paid).forEach(a=>{const s=DB.find('services',a.serviceId);if(s)svcCount[s.name]=(svcCount[s.name]||0)+1;});
   const topServices=Object.entries(svcCount).sort((a,b)=>b[1]-a[1]);
-  const barberCount={};appts.filter(valid).forEach(a=>{const b=DB.find('barbers',a.barberId);if(b)barberCount[b.name]=(barberCount[b.name]||0)+1;});
+  const barberCount={};appts.filter(paid).forEach(a=>{const b=DB.find('barbers',a.barberId);if(b)barberCount[b.name]=(barberCount[b.name]||0)+1;});
   const topBarber=Object.entries(barberCount).sort((a,b)=>b[1]-a[1])[0];
   // occupancy estimate: today's booked slots vs capacity
   const barbers=DB.scope('barbers',shopId).filter(b=>b.active);
@@ -392,7 +393,7 @@ function renderOnbStep(){
     return `<div class="field"><label>Nome da barbearia *</label><input class="input" id="onb_shop" value="${escapeHtml(onbData.shopName||'')}" placeholder="Ex.: Hora Barbearia" oninput="onbSlugPreview(this.value)"><div class="err">Informe o nome.</div></div>
     <div class="field"><label>URL pública gerada</label>
       <div class="input" style="background:var(--surface-3);display:flex;align-items:center;gap:6px;cursor:default">
-        <span class="muted" style="white-space:nowrap;font-size:12px">${(location.origin+'/#/').replace(/^https?:\/\//,'')}</span><b id="onb_slug_preview" style="color:var(--primary);flex:1">${escapeHtml(slug)}</b>
+        <span class="muted" style="white-space:nowrap;font-size:12px">${(location.origin+'/b/').replace(/^https?:\/\//,'')}</span><b id="onb_slug_preview" style="color:var(--primary);flex:1">${escapeHtml(slug)}</b>
         <button class="btn btn-ghost btn-sm" style="padding:2px 8px;flex-shrink:0" onclick="onbToggleSlug()">${icon('edit')}</button>
       </div>
       <div id="onb_slug_edit" style="display:none;margin-top:8px">
@@ -431,7 +432,7 @@ function renderOnbStep(){
         <div class="summary-line"><span class="muted">Nome</span><b>${escapeHtml(onbData.name||'')}</b></div>
         <div class="summary-line"><span class="muted">E-mail</span><b>${escapeHtml(onbData.email||'')}</b></div>
         <div class="summary-line"><span class="muted">Barbearia</span><b>${escapeHtml(onbData.shopName||'')}</b></div>
-        <div class="summary-line"><span class="muted">Link</span><b style="color:var(--primary);font-size:12.5px">${escapeHtml((location.origin+'/#/'+(onbData.shopSlug||'')).replace(/^https?:\/\//,''))}</b></div>
+        <div class="summary-line"><span class="muted">Link</span><b style="color:var(--primary);font-size:12.5px">${escapeHtml((location.origin+'/b/'+(onbData.shopSlug||'')).replace(/^https?:\/\//,''))}</b></div>
         <div class="summary-line"><span class="muted">Plano</span><b>${escapeHtml(plan.name)}${isFree?'':' · 7 dias grátis'}</b></div>
       </div>
     </div>`;

@@ -548,9 +548,9 @@ function dashSubscription(shop){
   <div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(212,175,55,.07),transparent),var(--surface)">
     <div class="panel-head">
       <div><h3>${e.isEnterprise?icon('building')+' ':''}Plano atual: <b>${escapeHtml(e.planName)}</b></h3><span class="badge ${stCls}">${stLabel}</span></div>
-      ${!e.isEnterprise?`<button class="btn btn-primary btn-sm" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`:''}
+      ${!e.isEnterprise?`<button class="btn btn-primary btn-sm" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Solicitar mudança</button>`:''}
     </div>
-    ${isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu trial termina em ${fmtDate(renewsAt)}. Assine para não perder o acesso aos recursos.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Assinar agora</button></div>`:''}
+    ${isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu trial termina em ${fmtDate(renewsAt)}. Solicite a assinatura para não perder o acesso aos recursos.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Solicitar assinatura</button></div>`:''}
     <div class="form-row three" style="margin-top:14px">
       <div class="summary-line"><span class="muted">Plano</span><b>${escapeHtml(plan.name)}</b></div>
       <div class="summary-line"><span class="muted">Status</span><b>${stLabel}</b></div>
@@ -578,7 +578,7 @@ function dashSubscription(shop){
         <ul>${p.features.slice(0,4).map(f=>`<li>${icon('check')} ${escapeHtml(f)}</li>`).join('')}</ul>
         ${isCurrent
           ?`<button class="btn btn-outline btn-block" disabled>Plano atual</button>`
-          :`<button class="btn ${p.price>(plan.price||0)?'btn-primary':'btn-ghost'} btn-block" onclick="changePlanOwner('${shop.id}','${p.id}')">${p.price>(plan.price||0)?icon('rocket')+' Upgrade':icon('down')+' Downgrade'}</button>`}
+          :`<button class="btn ${p.price>(plan.price||0)?'btn-primary':'btn-ghost'} btn-block" onclick="requestPlanChange('${shop.id}','${p.id}')">${p.price>(plan.price||0)?icon('rocket')+' Solicitar upgrade':icon('down')+' Solicitar downgrade'}</button>`}
       </div>`;}).join('')}
   </div>
 
@@ -587,28 +587,25 @@ function dashSubscription(shop){
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       ${e.isEnterprise
         ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com comercial</a>`
-        :`<button class="btn btn-primary" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`}
+        :`<button class="btn btn-primary" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Solicitar mudança</button>`}
       ${sub.status!=='canceled'&&shop.planId!=='free'?`<button class="btn btn-ghost" style="color:var(--danger)" onclick="confirmAction('Cancelar assinatura?','Você terá acesso até o fim do ciclo atual. Entre em contato para confirmar.',()=>{toast('Para cancelar, escreva para contato@groomin.com.br','info');})">${icon('x')} Cancelar assinatura</button>`:''}
     </div>
   </div>`;
 }
 function openPlanSelectorOwner(shopId){
   const shop=DB.find('barbershops',shopId);
-  openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Alterar plano</h3><div class="sub">${escapeHtml(shop.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
-  <div class="modal-body"><div class="grid" style="gap:10px">${DB.all('plans').filter(p=>!p.enterprise).map(p=>`<div class="select-item ${shop.planId===p.id?'sel':''}" onclick="changePlanOwner('${shopId}','${p.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="t">${escapeHtml(p.name)}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div><div class="p">${p.price===0?'Grátis':money(p.price)+'/mês'}</div></div></div>`).join('')}</div>
+  openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Solicitar mudança de plano</h3><div class="sub">${escapeHtml(shop.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body"><p class="muted" style="margin-bottom:12px">A mudança é confirmada pelo comercial antes de liberar recursos e cobrança.</p><div class="grid" style="gap:10px">${DB.all('plans').filter(p=>!p.enterprise).map(p=>`<div class="select-item ${shop.planId===p.id?'sel':''}" onclick="requestPlanChange('${shopId}','${p.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="t">${escapeHtml(p.name)}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div><div class="p">${p.price===0?'Grátis':money(p.price)+'/mês'}</div></div></div>`).join('')}</div>
   <p class="muted" style="font-size:12.5px;margin-top:12px">Plano Enterprise e cancelamento: contato@groomin.com.br</p></div>`);
 }
-function changePlanOwner(shopId,planId){
-  const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId),current=DB.find('plans',shop.planId);
-  const isUpgrade=plan.price>(current?current.price:0);
-  confirmAction(isUpgrade?`Upgrade para ${plan.name}?`:`Downgrade para ${plan.name}?`,isUpgrade?'Seus recursos serão expandidos imediatamente.':'Alguns recursos serão limitados. A mudança ocorre no próximo ciclo.',()=>{
-    DB.update('barbershops',shopId,{planId});
-    const sub=shopSubscription(shopId);
-    if(sub)DB.update('subscriptions',sub.id,{planId,mrr:plan.price,status:'active',custom:null});
-    else DB.insert('subscriptions',{barbershopId:shopId,planId,status:'active',mrr:plan.price,startedAt:Date.now(),renewsAt:DB.addDays(DB.todayISO(),30)});
-    DB.log(isUpgrade?'Upgrade de plano':'Downgrade de plano',`${shop.name} → ${plan.name}`,shopId);
-    closeModal();toast(`Plano alterado para ${plan.name}.`,'ok');refreshShell();
-  },isUpgrade);
+function requestPlanChange(shopId,planId){
+  const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId);
+  if(!shop||!plan)return;
+  const subject=encodeURIComponent(`Solicitação de plano — ${shop.name}`);
+  const body=encodeURIComponent(`Olá! Gostaria de solicitar o plano ${plan.name} para a barbearia ${shop.name} (ID: ${shopId}).\n\nE-mail de contato: ${shop.email||''}`);
+  closeModal();
+  location.href=`mailto:contato@groomin.com.br?subject=${subject}&body=${body}`;
+  toast('Sua solicitação de plano está pronta para envio.','info');
 }
 
 /* ============================================================
