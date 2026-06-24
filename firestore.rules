@@ -1,0 +1,139 @@
+rules_version = '2';
+
+// ============================================================
+// BarberOS — Firestore Rules (modo TESTE, plano Spark, SEM Functions)
+// Projeto: groomin-952d0
+//
+// Papel/tenant são lidos do documento /users/{uid} via get()
+// (em vez de custom claims, que exigiriam Cloud Functions/Blaze).
+// Isolamento multi-tenant continua estrito: todo acesso a dados de
+// um tenant exige que o usuário pertença AQUELE tenant.
+//
+// Bootstrap do dono (sequencial no cliente):
+//   1) cria /tenants/{tid} com ownerUid == seu uid
+//   2) cria /users/{uid} com role 'owner' e tenantId = tid
+//   3) cria /slugs/{slug}, /subscriptions/{tid}, serviço e barbeiro iniciais
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid()      { return request.auth.uid; }
+    function userPath() { return /databases/$(database)/documents/users/$(uid()); }
+    function hasUser()  { return signedIn() && exists(userPath()); }
+    function ud()       { return get(userPath()).data; }
+    function role()     { return hasUser() ? ud().role : ''; }
+    function myTenant() { return hasUser() ? ud().tenantId : ''; }
+    function myCustomer(){ return hasUser() ? ud().customerId : ''; }
+    function isSuper()  { return role() == 'super_admin'; }
+    function inTenant(tid){ return hasUser() && ud().tenantId == tid; }
+    function staffOf(tid){ return inTenant(tid) && (ud().role in ['owner','manager','receptionist','barber']); }
+    function mgrOf(tid) { return inTenant(tid) && (ud().role in ['owner','manager']); }
+    function ownerOf(tid){ return inTenant(tid) && ud().role == 'owner'; }
+    function tenantActive(tid){ return exists(/databases/$(database)/documents/tenants/$(tid))
+                                  && get(/databases/$(database)/documents/tenants/$(tid)).data.status == 'active'; }
+
+    // ===================== USERS =====================
+    match /users/{userId} {
+      allow read: if isSuper()
+                  || (signedIn() && uid() == userId)
+                  || (hasUser() && (ud().role in ['owner','manager']) && resource.data.tenantId == myTenant());
+      // self-signup do dono (role owner) ou cliente; staff é criado por gerência
+      allow create: if isSuper()
+                    || (uid() == userId
+                        && request.resource.data.role in ['owner','customer']
+                        && request.resource.data.tenantId is string)
+                    || (hasUser() && (ud().role in ['owner','manager'])
+                        && request.resource.data.tenantId == myTenant()
+                        && request.resource.data.role in ['manager','receptionist','barber']);
+      allow update: if isSuper()
+                    || (uid() == userId
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.tenantId == resource.data.tenantId);
+      allow delete: if isSuper() || (hasUser() && mgrOf(resource.data.tenantId));
+    }
+
+    // ============== SLUG REGISTRY (público p/ resolver a página) ==============
+    match /slugs/{slug} {
+      allow read:   if true;
+      allow create: if signedIn(); // reservado no bootstrap
+      allow update, delete: if isSuper();
+    }
+
+    // ===================== PLATAFORMA =====================
+    match /subscriptions/{tid} {
+      allow read:   if isSuper() || inTenant(tid);
+      // criada no bootstrap pelo dono do tenant (tenant já existe e é dele)
+      allow create: if isSuper()
+                    || (signedIn()
+                        && get(/databases/$(database)/documents/tenants/$(tid)).data.ownerUid == uid());
+      allow update: if isSuper() || ownerOf(tid);
+      allow delete: if isSuper();
+    }
+    match /invoices/{id}   { allow read: if isSuper() || mgrOf(resource.data.tenantId);
+                             allow write: if isSuper(); }
+    match /auditLogs/{id}  { allow read:   if isSuper() || mgrOf(resource.data.tenantId);
+                             allow create: if hasUser() && request.resource.data.tenantId == myTenant();
+                             allow update, delete: if false; }
+    match /platformSettings/{doc} { allow read: if signedIn(); allow write: if isSuper(); }
+
+    // ===================== TENANTS =====================
+    match /tenants/{tid} {
+      allow read:   if true; // perfil público (página da barbearia)
+      allow create: if isSuper() || (signedIn() && request.resource.data.ownerUid == uid());
+      allow update: if isSuper() || ownerOf(tid);
+      allow delete: if isSuper();
+
+      // -------- subcoleções PÚBLICAS (necessárias p/ agendar) --------
+      match /services/{id} { allow read: if true; allow write: if isSuper() || mgrOf(tid); }
+      match /barbers/{id}  { allow read: if true; allow write: if isSuper() || mgrOf(tid); }
+      match /reviews/{id}  { allow read: if true; allow create: if true;
+                             allow update, delete: if isSuper() || mgrOf(tid); }
+
+      // -------- agendamentos --------
+      match /appointments/{id} {
+        allow read:   if isSuper() || staffOf(tid)
+                      || (inTenant(tid) && role() == 'customer' && resource.data.customerId == myCustomer());
+        // booking público (sem conta) validado por campos + tenant ativo
+        allow create: if isSuper() || staffOf(tid)
+                      || (request.resource.data.tenantId == tid
+                          && request.resource.data.status in ['confirmado','pendente']
+                          && request.resource.data.keys().hasAll(['customerName','phone','serviceId','barberId','date','time','price'])
+                          && tenantActive(tid));
+        allow update: if isSuper() || staffOf(tid)
+                      || (inTenant(tid) && role() == 'customer'
+                          && resource.data.customerId == myCustomer()
+                          && request.resource.data.customerId == resource.data.customerId);
+        allow delete: if isSuper() || mgrOf(tid);
+      }
+
+      // -------- clientes (booking público cria/encontra) --------
+      match /customers/{id} {
+        allow read:   if isSuper() || staffOf(tid)
+                      || (inTenant(tid) && role() == 'customer' && id == myCustomer());
+        allow create: if isSuper() || staffOf(tid)
+                      || (request.resource.data.tenantId == tid && tenantActive(tid));
+        allow update: if isSuper() || staffOf(tid)
+                      || (inTenant(tid) && role() == 'customer' && id == myCustomer());
+        allow delete: if isSuper() || mgrOf(tid);
+      }
+
+      // -------- privadas do tenant --------
+      match /sales/{id}        { allow read, write: if isSuper() || staffOf(tid); }
+      match /cashSessions/{id} { allow read, write: if isSuper() || staffOf(tid); }
+      match /stockMoves/{id}   { allow read, write: if isSuper() || staffOf(tid); }
+      match /blocks/{id}       { allow read, write: if isSuper() || staffOf(tid); }
+      match /notifications/{id}{ allow read: if isSuper() || staffOf(tid);
+                                 allow create: if isSuper() || staffOf(tid) || request.resource.data.tenantId == tid;
+                                 allow update, delete: if isSuper() || staffOf(tid); }
+      match /products/{id}   { allow read: if isSuper() || staffOf(tid); allow write: if isSuper() || mgrOf(tid); }
+      match /combos/{id}     { allow read: if isSuper() || staffOf(tid); allow write: if isSuper() || mgrOf(tid); }
+      match /campaigns/{id}  { allow read: if isSuper() || mgrOf(tid);   allow write: if isSuper() || mgrOf(tid); }
+      match /settings/{id}   { allow read: if isSuper() || staffOf(tid); allow write: if isSuper() || ownerOf(tid); }
+    }
+
+    // ===================== DEFAULT DENY =====================
+    match /{document=**} { allow read, write: if false; }
+  }
+}

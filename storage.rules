@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// ============================================================
+// BarberOS — Cloud Storage Rules (multi-tenant)
+// Estrutura: /tenants/{tid}/{tipo}/{arquivo}
+//   logos, capas e fotos de barbeiros/produtos.
+// Leitura pública (imagens da página pública); escrita só do próprio tenant.
+// ============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn()    { return request.auth != null; }
+    function role()        { return signedIn() ? request.auth.token.role : ''; }
+    function tenant()      { return signedIn() ? request.auth.token.tenantId : ''; }
+    function isSuper()     { return signedIn() && role() == 'super_admin'; }
+    function mgrOf(tid)    { return signedIn() && tenant() == tid && (role() in ['owner','manager']); }
+    // valida imagem e tamanho (<= 5MB)
+    function validImage()  { return request.resource.size < 5 * 1024 * 1024
+                                 && request.resource.contentType.matches('image/.*'); }
+
+    match /tenants/{tid}/{allPaths=**} {
+      allow read:  if true;                          // imagens públicas
+      allow write: if (isSuper() || mgrOf(tid)) && validImage();
+    }
+
+    // tudo o mais negado
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

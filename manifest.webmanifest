@@ -1,0 +1,44 @@
+{
+  "name": "Groomin — Gestão para Barbearias",
+  "short_name": "Groomin",
+  "description": "Plataforma completa de gestão para barbearias: agenda, CRM, PDV, estoque, financeiro, marketing e IA.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0F0F0F",
+  "theme_color": "#0F0F0F",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Entrar / Painel",
+      "short_name": "Entrar",
+      "url": "./index.html#/login",
+      "description": "Acessar o painel de gestão"
+    },
+    {
+      "name": "PDV / Caixa",
+      "short_name": "PDV",
+      "url": "./index.html#/dashboard/pdv",
+      "description": "Abrir o ponto de venda"
+    }
+  ]
+}
