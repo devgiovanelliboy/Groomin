@@ -96,24 +96,31 @@
     let base = slugifyStr(slugOverride || shopName) || "barbearia", slug = base, n = 1;
     while ((await getDoc(doc(FB.db, "slugs", slug))).exists()) slug = base + "-" + (++n);
     await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
-    await setDoc(tRef, {
+    const tenantPayload = {
       name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
       description: "Barbearia cadastrada no Groomin.",
       phone: phone || "", whatsapp: whatsapp || phone || "",
       email, address: address || "", city: "", neighborhood: "", instagram: "",
       open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
       slotInterval: 30, status: "active", planId: pid, rating: 0, createdAt: Date.now(),
-    });
+    };
+    await setDoc(tRef, tenantPayload);
+    // Hidrata local DB imediatamente com o plano correto (sem aguardar onSnapshot)
+    try { const d = DB.get(); upsert(d.barbershops, { id: tid, ...tenantPayload }); DB.save(); } catch (_) {}
     await setDoc(doc(FB.db, "users", uid), {
       name: ownerName || "Dono", email, role: "owner", tenantId: tid, active: true, createdAt: Date.now(),
     });
     const trialDays = pid === "free" ? 0 : 7;
-    await setDoc(doc(FB.db, "subscriptions", tid), {
+    const subPayload = {
       tenantId: tid, planId: pid,
       status: pid === "free" ? "active" : "trialing",
       mrr, startedAt: Date.now(),
       renewsAt: Date.now() + trialDays * 86400000,
-    });
+    };
+    await setDoc(doc(FB.db, "subscriptions", tid), subPayload);
+    // Hidrata assinatura local imediatamente (shopSubscription filtra por barbershopId)
+    try { const d = DB.get(); upsert(d.subscriptions, { id: tid, barbershopId: tid, ...subPayload }); DB.save(); } catch (_) {}
+
     await addDoc(collection(FB.db, "tenants", tid, "services"), {
       tenantId: tid, barbershopId: tid, name: "Corte Masculino", desc: "Corte personalizado.",
       price: 45, duration: 30, category: "Cabelo", icon: "scissors", active: true,
@@ -172,26 +179,45 @@
   window.fbPublicBooking = async function (p) {
     const { doc, collection, getDocs, query, where, setDoc, addDoc } = F;
     const tid = p.tenantId;
-    // conflito no cliente
-    const dayQ = await getDocs(query(collection(FB.db, "tenants", tid, "appointments"), where("date", "==", p.date)));
-    const s0 = toMin(p.time);
-    for (const d of dayQ.docs) {
-      const a = d.data(); if (a.status === "cancelado" || a.barberId !== p.barberId) continue;
-      const aS = toMin(a.time), aE = aS + (a.duration || 30);
-      if (s0 < aE && (s0 + (p.duration || 30)) > aS) { const e = new Error("já reservado"); e.code = "already-exists"; throw e; }
+    // conflito no cliente — query pode falhar (permission-denied) para clientes autenticados
+    // cuja regra de leitura requer customerId == myCustomer() (coleção inteira negada)
+    try {
+      const dayQ = await getDocs(query(collection(FB.db, "tenants", tid, "appointments"), where("date", "==", p.date)));
+      const s0 = toMin(p.time);
+      for (const d of dayQ.docs) {
+        const a = d.data(); if (a.status === "cancelado" || a.barberId !== p.barberId) continue;
+        const aS = toMin(a.time), aE = aS + (a.duration || 30);
+        if (s0 < aE && (s0 + (p.duration || 30)) > aS) { const e = new Error("já reservado"); e.code = "already-exists"; throw e; }
+      }
+    } catch(conflictErr) {
+      if ((conflictErr.code || "") === "already-exists") throw conflictErr;
+      // permission-denied ou outro erro na leitura: pula check client-side, prossegue com addDoc
     }
-    // cliente
-    let customerId = null;
-    const cq = await getDocs(query(collection(FB.db, "tenants", tid, "customers"), where("phone", "==", p.phone)));
-    if (!cq.empty) customerId = cq.docs[0].id;
-    else { const cRef = await addDoc(collection(FB.db, "tenants", tid, "customers"),
-      { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone, whatsapp: p.phone, email: p.email || "", notes: "", createdAt: Date.now() });
-      customerId = cRef.id; }
-    const aRef = await addDoc(collection(FB.db, "tenants", tid, "appointments"), {
+    // cliente — usa customerId direto quando cliente está logado, evita doc duplicado
+    let customerId = p.customerId || null;
+    if (!customerId) {
+      const cq = p.phone
+        ? await getDocs(query(collection(FB.db, "tenants", tid, "customers"), where("phone", "==", p.phone)))
+        : { empty: true };
+      if (!cq.empty) customerId = cq.docs[0].id;
+      else { const cRef = await addDoc(collection(FB.db, "tenants", tid, "customers"),
+        { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone || "", whatsapp: p.phone || "", email: p.email || "", notes: "", createdAt: Date.now() });
+        customerId = cRef.id; }
+    }
+    const apptPayload = {
       tenantId: tid, barbershopId: tid, customerId, customerName: p.name, phone: p.phone,
       serviceId: p.serviceId, barberId: p.barberId, date: p.date, time: p.time,
       duration: p.duration || 30, status: "confirmado", price: p.price || 0, source: "public", createdAt: Date.now(),
-    });
+    };
+    const aRef = await addDoc(collection(FB.db, "tenants", tid, "appointments"), apptPayload);
+    // Hidrata cache local imediatamente — o onSnapshot do cliente é bloqueado por regras
+    // (query de coleção inteira negada para role=customer), então injetamos manualmente.
+    try {
+      const d = DB.get();
+      if (!d.appointments) d.appointments = [];
+      upsert(d.appointments, { id: aRef.id, ...apptPayload });
+      DB.save();
+    } catch (_) {}
     return { appointmentId: aRef.id };
   };
   const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
@@ -221,6 +247,11 @@
       }, () => {}));
       const colls = user.role === "customer" ? ["appointments", "services", "barbers"] : TENANT_COLLS;
       colls.forEach((c) => bindColl(["tenants", tid, c], c, tid));
+      if (user.role !== "customer") {
+        FB.unsubs.push(onSnapshot(doc(FB.db, "subscriptions", tid), (d) => {
+          if (d.exists()) { upsert(data.subscriptions, { id: d.id, barbershopId: tid, ...d.data() }); DB.save(); render(); }
+        }, () => {}));
+      }
       if (user.role === "customer" && user.customerId) {
         FB.unsubs.push(onSnapshot(doc(FB.db, "tenants", tid, "customers", user.customerId), (d) => {
           if (d.exists()) {

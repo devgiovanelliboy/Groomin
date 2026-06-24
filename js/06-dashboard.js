@@ -558,7 +558,7 @@ function dashSubscription(shop){
     </div>
     <div class="form-row three">
       <div class="summary-line"><span class="muted">Profissionais</span><b>${DB.scope('barbers',shop.id).filter(b=>b.active).length} / ${e.limitBarbers>=999?'∞':e.limitBarbers}</b></div>
-      <div class="summary-line"><span class="muted">Valor</span><b>${sub.mrr?money(sub.mrr)+'/mês':'Grátis'}</b></div>
+      <div class="summary-line"><span class="muted">Valor</span><b>${(sub.mrr||e.monthly)>0?money(sub.mrr||e.monthly)+'/mês':'Grátis'}</b></div>
       <div class="summary-line"><span class="muted">Ciclo</span><b>Mensal</b></div>
     </div>
     <div class="chips" style="margin-top:12px">${ENT_FEATURES.map(f=>`<span class="badge ${e[f[0]]?'ok':'muted'}">${e[f[0]]?icon('check'):icon('x')} ${f[1]}</span>`).join('')}</div>

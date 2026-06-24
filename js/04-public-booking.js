@@ -96,7 +96,7 @@ function renderPublic(r){
         <div>
           <div class="panel" style="position:sticky;top:90px">
             <h3 style="margin-bottom:6px">Agende seu horário</h3>
-            <p class="muted" style="font-size:13.5px;margin-bottom:16px">Rápido, sem precisar criar conta.</p>
+            <p class="muted" style="font-size:13.5px;margin-bottom:16px">Agende online em poucos passos.</p>
             <button class="btn btn-primary btn-block" onclick="startBooking('${shop.id}')">${icon('calendar')} Reservar agora</button>
             <div class="summary-line" style="margin-top:16px"><span class="muted">Horário</span><b>${shop.open} – ${shop.close}</b></div>
             <div class="summary-line"><span class="muted">Profissionais</span><b>${barbers.length}</b></div>
@@ -106,6 +106,10 @@ function renderPublic(r){
         </div>
       </div>
     </div>`);
+  if(window._pendingBooking&&window._pendingBooking.shopId===shop.id){
+    const pb=window._pendingBooking;window._pendingBooking=null;
+    setTimeout(()=>startBooking(pb.shopId,pb.serviceId,pb.barberId),200);
+  }
 }
 function publicShell(inner){
   const u=Session.user;
@@ -125,9 +129,22 @@ function publicShell(inner){
    ============================================================ */
 let booking={};
 function startBooking(shopId,serviceId,barberId){
+  if(window.__FB_ENABLED){
+    const u=Session.effectiveUser;
+    if(!(u&&u.role==='customer')){
+      window._pendingBooking={shopId,serviceId:serviceId||null,barberId:barberId||null};
+      toast('Entre na sua conta para agendar.','info');
+      openPublicCustomerLogin(shopId);return;
+    }
+  }
   booking={shopId,service:serviceId||null,barber:barberId||null,date:null,time:null,assignedBarber:null,name:'',phone:'',email:'',step:1};
-  const u=Session.user;
-  if(u&&u.role==='customer'&&u.barbershopId===shopId){const c=DB.find('customers',u.customerId);if(c){booking.name=c.name;booking.phone=c.phone;booking.email=c.email;}}
+  const u=Session.effectiveUser;
+  if(u&&u.role==='customer'){
+    const c=u.barbershopId===shopId?DB.find('customers',u.customerId):null;
+    booking.name=(c&&c.name)||u.name||'';
+    booking.phone=(c&&c.phone)||'';
+    booking.email=(c&&c.email)||u.email||'';
+  }
   if(serviceId)booking.step=2;
   renderBooking();
 }
@@ -162,13 +179,24 @@ function renderBookingStep(){
       ${slots.length?`<div class="slot-grid">${slots.map(s=>`<button class="slot ${booking.time===s.time?'sel':''}" ${s.available?'':'disabled'} onclick="pickTime('${s.time}','${s.barberId||''}')">${s.time}</button>`).join('')}</div>`:emptyState('clock','Sem horários','Não há horários livres nesta data.')}
       <div style="margin-top:18px"><button class="btn btn-ghost" onclick="bookGo(3)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===5){
+    const _u5=Session.effectiveUser;
+    if(window.__FB_ENABLED&&_u5&&_u5.role==='customer'){
+      c.innerHTML=`<h4 style="margin-bottom:14px">Confirmando como</h4>
+        <div class="card" style="padding:16px;margin-bottom:16px">
+          <div class="summary-line"><span class="muted">Nome</span><b>${escapeHtml(booking.name||'—')}</b></div>
+          <div class="summary-line"><span class="muted">WhatsApp</span><b>${escapeHtml(booking.phone||'—')}</b></div>
+          <div class="summary-line"><span class="muted">E-mail</span><b>${escapeHtml(booking.email||'—')}</b></div>
+        </div>
+        <p class="muted" style="font-size:12.5px">${icon('user')} Dados da sua conta Groomin.</p>
+        <div style="margin-top:14px;display:flex;justify-content:space-between"><button class="btn btn-ghost" onclick="bookGo(4)">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="bookGo(6)">Revisar ${icon('arrowRight')}</button></div>`;
+      return;
+    }
     c.innerHTML=`<h4 style="margin-bottom:14px">Seus dados</h4>
       <div class="field"><label>Nome completo *</label><div class="input-icon">${icon('user')}<input class="input" id="bk_name" value="${escapeHtml(booking.name)}" placeholder="Ex.: João da Silva"></div><div class="err">Informe seu nome.</div></div>
       <div class="form-row">
         <div class="field"><label>WhatsApp *</label><div class="input-icon">${icon('whatsapp')}<input class="input" id="bk_phone" value="${escapeHtml(booking.phone)}" placeholder="(11) 90000-0000"></div><div class="err">Telefone inválido.</div></div>
         <div class="field"><label>E-mail *</label><div class="input-icon">${icon('mail')}<input class="input" id="bk_email" value="${escapeHtml(booking.email)}" placeholder="voce@email.com"></div><div class="err">E-mail inválido.</div></div>
       </div>
-      <p class="muted" style="font-size:12.5px">${icon('lock')} Não é necessário criar conta para agendar.</p>
       <div style="margin-top:14px;display:flex;justify-content:space-between"><button class="btn btn-ghost" onclick="bookGo(4)">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="submitBookingData()">Revisar ${icon('arrowRight')}</button></div>`;
   }else if(booking.step===6){
     const shop=DB.find('barbershops',shopId),svc=DB.find('services',booking.service);
@@ -209,10 +237,19 @@ function confirmBooking(){
   const bid0=booking.barber==='any'?firstAvailableBarber(shopId,booking.date,booking.time,svc.duration):booking.barber;
   if(window.__FB_ENABLED){ // booking público seguro via Cloud Function (valida e grava no servidor)
     if(!bid0){toast('Horário indisponível. Escolha outro.','err');booking.step=4;renderBooking();return;}
-    fbPublicBooking({tenantId:shopId,serviceId:svc.id,barberId:bid0,date:booking.date,time:booking.time,name:booking.name,phone:booking.phone,email:booking.email})
-      .then(res=>{const shop=DB.find('barbershops',shopId),barber=DB.find('barbers',bid0);
-        $('#modal').querySelector('.modal-body').innerHTML=`<div class="success-wrap"><div class="success-check">${icon('check')}</div><h3 style="font-size:23px;margin-bottom:8px">Agendamento confirmado! 🎉</h3><p class="muted" style="max-width:400px;margin:0 auto 8px">Enviamos a confirmação para o seu WhatsApp e e-mail.</p><div class="card" style="padding:18px;text-align:left;max-width:400px;margin:18px auto 0"><div class="summary-line"><span class="muted">Serviço</span><b>${escapeHtml(svc.name)}</b></div><div class="summary-line"><span class="muted">Quando</span><b>${fmtDate(booking.date)} · ${booking.time}</b></div><div class="summary-line"><span class="muted">Código</span><b>#${String(res.appointmentId||'').slice(-6).toUpperCase()}</b></div></div><div style="margin-top:22px"><button class="btn btn-primary" onclick="closeModal()">Fechar</button></div></div>`;
-        toast('Agendamento confirmado!','ok');})
+    const _u=Session.effectiveUser;
+    const _loggedCustId=(_u&&_u.role==='customer'&&_u.barbershopId===shopId)?_u.customerId:undefined;
+    const _rescheduleId=booking._reschedule||null;
+    fbPublicBooking({tenantId:shopId,serviceId:svc.id,barberId:bid0,date:booking.date,time:booking.time,name:booking.name,phone:booking.phone,email:booking.email,customerId:_loggedCustId,duration:svc.duration,price:svc.price})
+      .then(res=>{
+        if(_rescheduleId)DB.update('appointments',_rescheduleId,{status:'cancelado'});
+        const shop=DB.find('barbershops',shopId),barber=DB.find('barbers',bid0);
+        $('#modal').querySelector('.modal-body').innerHTML=`<div class="success-wrap"><div class="success-check">${icon('check')}</div><h3 style="font-size:23px;margin-bottom:8px">Agendamento confirmado! 🎉</h3><p class="muted" style="max-width:400px;margin:0 auto 8px">Enviamos a confirmação para o seu WhatsApp e e-mail.</p><div class="card" style="padding:18px;text-align:left;max-width:400px;margin:18px auto 0"><div class="summary-line"><span class="muted">Serviço</span><b>${escapeHtml(svc.name)}</b></div><div class="summary-line"><span class="muted">Quando</span><b>${fmtDate(booking.date)} · ${booking.time}</b></div><div class="summary-line"><span class="muted">Código</span><b>#${String(res.appointmentId||'').slice(-6).toUpperCase()}</b></div></div><div style="margin-top:22px"><button class="btn btn-primary" onclick="closeModal()">Fechar</button>${_loggedCustId?`<button class="btn btn-ghost" style="margin-left:8px" onclick="closeModal();Router.go('#/my-appointments')">${icon('calendar')} Meus agendamentos</button>`:''}</div></div>`;
+        toast('Agendamento confirmado!','ok');
+        // Actualiza a página do cliente em background para que a lista de agendamentos
+        // reflita o novo item quando o usuário fechar o modal (já está em #/my-appointments)
+        setTimeout(()=>{ if(window.renderCustomer)renderCustomer(); },300);
+      })
       .catch(err=>{toast(/already-exists/.test(err.code||'')?'Esse horário acabou de ser reservado.':'Não foi possível agendar.','err');booking.step=4;renderBooking();});
     return;
   }
@@ -274,17 +311,18 @@ function createCustomerAccount(shopId,custId){
 
 /* Login/cadastro de cliente diretamente na página da barbearia */
 function openPublicCustomerLogin(shopId){
-  let tab='login';
+  window._pclTab='login';
   function render(){
+    const tab=window._pclTab;
     const body=tab==='login'
       ?`<div class="field"><label>E-mail</label><input class="input" id="pcl_email" placeholder="voce@email.com"><div class="err">E-mail inválido.</div></div>
          <div class="field"><label>Senha</label><input class="input" type="password" id="pcl_pass" placeholder="Sua senha"><div class="err">Mínimo 6 caracteres.</div></div>
-         <p style="font-size:13px;margin-top:10px" class="muted">Novo por aqui? <a style="color:var(--primary);cursor:pointer" onclick="tab='register';pclRe()">Criar conta →</a></p>`
+         <p style="font-size:13px;margin-top:10px" class="muted">Novo por aqui? <a style="color:var(--primary);cursor:pointer" onclick="window._pclTab='register';pclRe()">Criar conta →</a></p>`
       :`<div class="field"><label>Seu nome *</label><input class="input" id="pcl_name" placeholder="Nome completo"><div class="err">Informe seu nome.</div></div>
          <div class="field"><label>E-mail *</label><input class="input" id="pcl_email" placeholder="voce@email.com"><div class="err">E-mail inválido.</div></div>
          <div class="field"><label>WhatsApp</label><input class="input" id="pcl_phone" placeholder="(11) 9 0000-0000"></div>
          <div class="field"><label>Senha *</label><input class="input" type="password" id="pcl_pass" placeholder="Mínimo 6 caracteres"><div class="err">Mínimo 6 caracteres.</div></div>
-         <p style="font-size:13px;margin-top:10px" class="muted">Já tem conta? <a style="color:var(--primary);cursor:pointer" onclick="tab='login';pclRe()">Entrar →</a></p>`;
+         <p style="font-size:13px;margin-top:10px" class="muted">Já tem conta? <a style="color:var(--primary);cursor:pointer" onclick="window._pclTab='login';pclRe()">Entrar →</a></p>`;
     const foot=tab==='login'
       ?`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="pclSubmit('login','${shopId}')">Entrar</button>`
       :`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="pclSubmit('register','${shopId}')">Criar conta</button>`;
