@@ -4,8 +4,12 @@
     "ignore": [
       "firebase.json",
       "**/.*",
+      ".git/**",
+      ".claude/**",
+      ".firebase/**",
       "**/node_modules/**",
       "functions/**",
+      "test-results/**",
       "*.rules",
       "firestore.indexes.json",
       "*.md",

@@ -1,0 +1,20 @@
+# Arquivos de desenvolvimento e metadados nunca devem ir para o Hosting.
+.git/
+.git/**
+.claude/
+.claude/**
+.firebase/
+.firebase/**
+node_modules/
+node_modules/**
+functions/
+functions/**
+test-results/
+test-results/**
+*.log
+*.md
+firebase.json
+firestore.rules
+firestore.indexes.json
+storage.rules
+README*
