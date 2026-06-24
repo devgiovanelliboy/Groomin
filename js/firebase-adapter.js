@@ -177,7 +177,7 @@
 
   // ---------------- BOOKING PÚBLICO (escrita direta validada por regras) ----------------
   window.fbPublicBooking = async function (p) {
-    const { doc, collection, getDocs, query, where, setDoc, addDoc } = F;
+    const { doc, collection, getDocs, query, where, addDoc, runTransaction } = F;
     const tid = p.tenantId;
     // conflito no cliente — query pode falhar (permission-denied) para clientes autenticados
     // cuja regra de leitura requer customerId == myCustomer() (coleção inteira negada)
@@ -207,19 +207,30 @@
     const apptPayload = {
       tenantId: tid, barbershopId: tid, customerId, customerName: p.name, phone: p.phone,
       serviceId: p.serviceId, barberId: p.barberId, date: p.date, time: p.time,
-      duration: p.duration || 30, status: "pendente", price: p.price || 0, source: "public", createdAt: Date.now(),
+      duration: p.duration || 30, status: "confirmado", price: p.price || 0, source: "public", createdAt: Date.now(),
     };
-    const aRef = await addDoc(collection(FB.db, "tenants", tid, "appointments"), apptPayload);
+    const appointmentId = publicAppointmentId(tid, p.barberId, p.date, p.time);
+    const aRef = doc(FB.db, "tenants", tid, "appointments", appointmentId);
+    await runTransaction(FB.db, async (tx) => {
+      const snap = await tx.get(aRef);
+      if (snap.exists() && snap.data().status !== "cancelado") {
+        const e = new Error("já reservado");
+        e.code = "already-exists";
+        throw e;
+      }
+      tx.set(aRef, apptPayload);
+    });
     // Hidrata cache local imediatamente — o onSnapshot do cliente é bloqueado por regras
     // (query de coleção inteira negada para role=customer), então injetamos manualmente.
     try {
       const d = DB.get();
       if (!d.appointments) d.appointments = [];
-      upsert(d.appointments, { id: aRef.id, ...apptPayload });
+      upsert(d.appointments, { id: appointmentId, ...apptPayload });
       DB.save();
     } catch (_) {}
-    return { appointmentId: aRef.id };
+    return { appointmentId };
   };
+  const publicAppointmentId = (tid, barberId, date, time) => `public_${tid}_${barberId}_${date}_${time}`;
   const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 
   // ---------------- LISTENERS (hidratação tempo real) ----------------

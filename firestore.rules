@@ -33,6 +33,32 @@ service cloud.firestore {
     function ownerOf(tid){ return inTenant(tid) && ud().role == 'owner'; }
     function tenantActive(tid){ return exists(/databases/$(database)/documents/tenants/$(tid))
                                   && get(/databases/$(database)/documents/tenants/$(tid)).data.status == 'active'; }
+    function publicAppointmentId(tid) {
+      return 'public_' + tid + '_' + request.resource.data.barberId + '_' + request.resource.data.date + '_' + request.resource.data.time;
+    }
+    function validPublicAppointment(tid, id) {
+      return id == publicAppointmentId(tid)
+             && request.resource.data.tenantId == tid
+             && request.resource.data.barbershopId == tid
+             && request.resource.data.status == 'confirmado'
+             && request.resource.data.source == 'public'
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','customerId','customerName','phone','serviceId','barberId','date','time','duration','status','price','source','createdAt'])
+             && request.resource.data.customerId is string
+             && request.resource.data.customerName is string
+             && request.resource.data.customerName.size() >= 2
+             && request.resource.data.phone is string
+             && request.resource.data.phone.size() >= 8
+             && request.resource.data.date is string
+             && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+             && request.resource.data.time is string
+             && request.resource.data.time.matches('^[0-2][0-9]:[0-5][0-9]$')
+             && request.resource.data.createdAt is number
+             && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.active == true
+             && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.price == request.resource.data.price
+             && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.duration == request.resource.data.duration
+             && get(/databases/$(database)/documents/tenants/$(tid)/barbers/$(request.resource.data.barberId)).data.active == true
+             && tenantActive(tid);
+    }
 
     // ===================== USERS =====================
     match /users/{userId} {
@@ -98,30 +124,13 @@ service cloud.firestore {
       match /appointments/{id} {
         allow read:   if isSuper() || staffOf(tid)
                       || (inTenant(tid) && role() == 'customer' && resource.data.customerId == myCustomer());
-        // Booking público: é sempre uma solicitação pendente. Serviço, preço,
-        // duração e profissional precisam corresponder aos documentos públicos.
+        // Booking público: confirma automaticamente usando um ID único por
+        // barbearia + barbeiro + dia + horário. Se o doc já existir e não estiver
+        // cancelado, a transação do cliente falha e o horário fica bloqueado.
         allow create: if isSuper() || staffOf(tid)
-                      || (request.resource.data.tenantId == tid
-                          && request.resource.data.barbershopId == tid
-                          && request.resource.data.status == 'pendente'
-                          && request.resource.data.source == 'public'
-                          && request.resource.data.keys().hasOnly(['tenantId','barbershopId','customerId','customerName','phone','serviceId','barberId','date','time','duration','status','price','source','createdAt'])
-                          && request.resource.data.customerId is string
-                          && request.resource.data.customerName is string
-                          && request.resource.data.customerName.size() >= 2
-                          && request.resource.data.phone is string
-                          && request.resource.data.phone.size() >= 8
-                          && request.resource.data.date is string
-                          && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-                          && request.resource.data.time is string
-                          && request.resource.data.time.matches('^[0-2][0-9]:[0-5][0-9]$')
-                          && request.resource.data.createdAt is number
-                          && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.active == true
-                          && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.price == request.resource.data.price
-                          && get(/databases/$(database)/documents/tenants/$(tid)/services/$(request.resource.data.serviceId)).data.duration == request.resource.data.duration
-                          && get(/databases/$(database)/documents/tenants/$(tid)/barbers/$(request.resource.data.barberId)).data.active == true
-                          && tenantActive(tid));
+                      || validPublicAppointment(tid, id);
         allow update: if isSuper() || staffOf(tid)
+                      || (resource.data.status == 'cancelado' && validPublicAppointment(tid, id))
                       || (inTenant(tid) && role() == 'customer'
                           && resource.data.customerId == myCustomer()
                           && request.resource.data.customerId == resource.data.customerId);
