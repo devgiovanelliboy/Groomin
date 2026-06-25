@@ -33,6 +33,56 @@ service cloud.firestore {
     function ownerOf(tid){ return inTenant(tid) && ud().role == 'owner'; }
     function tenantActive(tid){ return exists(/databases/$(database)/documents/tenants/$(tid))
                                   && get(/databases/$(database)/documents/tenants/$(tid)).data.status == 'active'; }
+    function publicCustomerFields(tid) {
+      return (!request.resource.data.keys().hasAny(['tenantId']) || request.resource.data.tenantId == tid)
+             && request.resource.data.barbershopId == tid
+             && request.resource.data.name is string
+             && request.resource.data.name.size() >= 2
+             && request.resource.data.phone is string
+             && request.resource.data.phone.size() >= 8
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','name','phone','whatsapp','email','birthday','notes','createdAt']);
+    }
+    function customerOwnsDoc(tid, id) {
+      return inTenant(tid)
+             && role() == 'customer'
+             && id == myCustomer()
+             && (!resource.data.keys().hasAny(['tenantId']) || request.resource.data.tenantId == resource.data.tenantId)
+             && request.resource.data.barbershopId == resource.data.barbershopId
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','name','phone','whatsapp','email','birthday','notes','createdAt'])
+             && request.resource.data.name is string
+             && request.resource.data.name.size() >= 2
+             && request.resource.data.phone is string
+             && request.resource.data.phone.size() >= 8;
+    }
+    function publicNotification(tid) {
+      return (!request.resource.data.keys().hasAny(['tenantId']) || request.resource.data.tenantId == tid)
+             && request.resource.data.barbershopId == tid
+             && request.resource.data.type in ['confirm','reschedule','cancel']
+             && request.resource.data.title is string
+             && request.resource.data.title.size() >= 2
+             && request.resource.data.msg is string
+             && request.resource.data.msg.size() >= 2
+             && request.resource.data.time is number
+             && request.resource.data.read == false
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','type','title','msg','time','read']);
+    }
+    function validReview(tid) {
+      return request.resource.data.barbershopId == tid
+             && (!request.resource.data.keys().hasAny(['tenantId']) || request.resource.data.tenantId == tid)
+             && request.resource.data.customerName is string
+             && request.resource.data.customerName.size() >= 2
+             && request.resource.data.rating is int
+             && request.resource.data.rating >= 1
+             && request.resource.data.rating <= 5
+             && request.resource.data.text is string
+             && request.resource.data.text.size() >= 2
+             && request.resource.data.text.size() <= 500
+             && request.resource.data.date is string
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','customerName','rating','text','date','customerId','appointmentId','createdAt']);
+    }
+    function userSafeFields() {
+      return request.resource.data.keys().hasOnly(['name','email','role','tenantId','customerId','barberId','active','createdAt']);
+    }
     function publicAppointmentId(tid) {
       return 'public_' + tid + '_' + request.resource.data.barberId + '_' + request.resource.data.date + '_' + request.resource.data.time;
     }
@@ -66,24 +116,35 @@ service cloud.firestore {
                   || (signedIn() && uid() == userId)
                   || (hasUser() && (ud().role in ['owner','manager']) && resource.data.tenantId == myTenant());
       // self-signup do dono (role owner) ou cliente; staff é criado por gerência
-      allow create: if isSuper()
+      allow create: if userSafeFields() && (isSuper()
                     || (uid() == userId
-                        && request.resource.data.role in ['owner','customer']
-                        && request.resource.data.tenantId is string)
+                        && request.resource.data.role == 'owner'
+                        && request.resource.data.tenantId is string
+                        && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)).data.ownerUid == uid())
+                    || (uid() == userId
+                        && request.resource.data.role == 'customer'
+                        && request.resource.data.tenantId is string
+                        && request.resource.data.customerId is string
+                        && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/customers/$(request.resource.data.customerId)).data.tenantId == request.resource.data.tenantId
+                        && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/customers/$(request.resource.data.customerId)).data.barbershopId == request.resource.data.tenantId
+                        && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)/customers/$(request.resource.data.customerId)).data.email == request.resource.data.email)
                     || (hasUser() && (ud().role in ['owner','manager'])
                         && request.resource.data.tenantId == myTenant()
-                        && request.resource.data.role in ['manager','receptionist','barber']);
+                        && request.resource.data.role in ['manager','receptionist','barber']));
       allow update: if isSuper()
-                    || (uid() == userId
-                        && request.resource.data.role == resource.data.role
-                        && request.resource.data.tenantId == resource.data.tenantId);
+                    || (userSafeFields()
+                        && uid() == userId
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['role','tenantId','active','customerId','barberId','createdAt']));
       allow delete: if isSuper() || (hasUser() && mgrOf(resource.data.tenantId));
     }
 
     // ============== SLUG REGISTRY (público p/ resolver a página) ==============
     match /slugs/{slug} {
       allow read:   if true;
-      allow create: if signedIn(); // reservado no bootstrap
+      allow create: if signedIn()
+                    && request.resource.data.tenantId is string
+                    && get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)).data.ownerUid == uid();
       allow update, delete: if isSuper();
     }
 
@@ -117,7 +178,7 @@ service cloud.firestore {
       // -------- subcoleções PÚBLICAS (necessárias p/ agendar) --------
       match /services/{id} { allow read: if true; allow write: if isSuper() || mgrOf(tid); }
       match /barbers/{id}  { allow read: if true; allow write: if isSuper() || mgrOf(tid); }
-      match /reviews/{id}  { allow read: if true; allow create: if true;
+      match /reviews/{id}  { allow read: if true; allow create: if tenantActive(tid) && validReview(tid);
                              allow update, delete: if isSuper() || mgrOf(tid); }
 
       // -------- agendamentos --------
@@ -142,9 +203,9 @@ service cloud.firestore {
         allow read:   if isSuper() || staffOf(tid)
                       || (inTenant(tid) && role() == 'customer' && id == myCustomer());
         allow create: if isSuper() || staffOf(tid)
-                      || (request.resource.data.tenantId == tid && tenantActive(tid));
+                      || (publicCustomerFields(tid) && tenantActive(tid));
         allow update: if isSuper() || staffOf(tid)
-                      || (inTenant(tid) && role() == 'customer' && id == myCustomer());
+                      || customerOwnsDoc(tid, id);
         allow delete: if isSuper() || mgrOf(tid);
       }
 
@@ -154,7 +215,7 @@ service cloud.firestore {
       match /stockMoves/{id}   { allow read, write: if isSuper() || staffOf(tid); }
       match /blocks/{id}       { allow read, write: if isSuper() || staffOf(tid); }
       match /notifications/{id}{ allow read: if isSuper() || staffOf(tid);
-                                 allow create: if isSuper() || staffOf(tid) || request.resource.data.tenantId == tid;
+                                 allow create: if isSuper() || staffOf(tid) || (tenantActive(tid) && publicNotification(tid));
                                  allow update, delete: if isSuper() || staffOf(tid); }
       match /products/{id}   { allow read: if isSuper() || staffOf(tid); allow write: if isSuper() || mgrOf(tid); }
       match /combos/{id}     { allow read: if isSuper() || staffOf(tid); allow write: if isSuper() || mgrOf(tid); }
