@@ -11,8 +11,11 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     function signedIn()    { return request.auth != null; }
-    function role()        { return signedIn() ? request.auth.token.role : ''; }
-    function tenant()      { return signedIn() ? request.auth.token.tenantId : ''; }
+    function userPath()    { return /databases/(default)/documents/users/$(request.auth.uid); }
+    function hasUser()     { return signedIn() && firestore.exists(userPath()); }
+    function ud()          { return firestore.get(userPath()).data; }
+    function role()        { return hasUser() ? ud().role : ''; }
+    function tenant()      { return hasUser() ? ud().tenantId : ''; }
     function isSuper()     { return signedIn() && role() == 'super_admin'; }
     function mgrOf(tid)    { return signedIn() && tenant() == tid && (role() in ['owner','manager']); }
     // valida imagem e tamanho (<= 5MB)
@@ -21,7 +24,8 @@ service firebase.storage {
 
     match /tenants/{tid}/{allPaths=**} {
       allow read:  if true;                          // imagens públicas
-      allow write: if (isSuper() || mgrOf(tid)) && validImage();
+      allow create, update: if (isSuper() || mgrOf(tid)) && validImage();
+      allow delete: if isSuper() || mgrOf(tid);
     }
 
     // tudo o mais negado

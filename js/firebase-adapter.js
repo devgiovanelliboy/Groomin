@@ -20,7 +20,7 @@
   const SDK = "https://www.gstatic.com/firebasejs/10.12.5/";
   const FB = { app: null, auth: null, db: null, unsubs: [] };
   window.FB = FB;
-  let A, F; // módulos auth e firestore
+  let A, F, ST; // módulos auth, firestore e storage
 
   async function load() {
     const appMod = await import(SDK + "firebase-app.js");
@@ -28,6 +28,10 @@
     F = await import(SDK + "firebase-firestore.js");
     FB.app = appMod.initializeApp(cfg);
     FB.auth = A.getAuth(FB.app);
+    if (cfg.storageBucket) {
+      ST = await import(SDK + "firebase-storage.js");
+      FB.storage = ST.getStorage(FB.app);
+    }
     try {
       FB.db = F.initializeFirestore(FB.app, {
         localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }),
@@ -36,6 +40,38 @@
     wireWriteThrough();
     A.onAuthStateChanged(FB.auth, onAuth);
   }
+
+  window.fbUploadTenantImage = async function (tid, kind, file, oldPath) {
+    if (!ST || !FB.storage) {
+      const e = new Error("Storage não configurado");
+      e.code = "storage-not-configured";
+      throw e;
+    }
+    if (!file) return null;
+    if (!/^image\//.test(file.type || "")) {
+      const e = new Error("Arquivo inválido");
+      e.code = "invalid-image";
+      throw e;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      const e = new Error("Imagem maior que 5MB");
+      e.code = "image-too-large";
+      throw e;
+    }
+    const ext = ((file.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "jpg";
+    const path = `tenants/${tid}/${kind}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const ref = ST.ref(FB.storage, path);
+    await ST.uploadBytes(ref, file, { contentType: file.type || "image/jpeg" });
+    const url = await ST.getDownloadURL(ref);
+    if (oldPath && oldPath !== path) window.fbDeleteStoragePath(oldPath).catch(() => {});
+    return { url, path };
+  };
+
+  window.fbDeleteStoragePath = async function (path) {
+    if (!path || !ST || !FB.storage) return;
+    if (!String(path).startsWith("tenants/")) return;
+    await ST.deleteObject(ST.ref(FB.storage, path));
+  };
 
   // ---------------- AUTH (sem claims: lê /users/{uid}) ----------------
   async function onAuth(user) {
@@ -98,7 +134,7 @@
     await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
     const tenantPayload = {
       name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
-      description: "Barbearia cadastrada no Groomin.", logoUrl: "",
+      description: "Barbearia cadastrada no Groomin.", logoUrl: "", logoPath: "",
       phone: phone || "", whatsapp: whatsapp || phone || "",
       email, address: address || "", city: "", neighborhood: "", instagram: "",
       open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
@@ -127,7 +163,7 @@
     });
     await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
       tenantId: tid, barbershopId: tid, name: ownerName || "Barbeiro",
-      role: "Proprietário & Barbeiro", photoUrl: "", bio: "", phone: phone || "", email,
+      role: "Proprietário & Barbeiro", photoUrl: "", photoPath: "", bio: "", phone: phone || "", email,
       specialties: ["Corte"], commission: 0, productCommission: 0, isOwner: true,
       start: "09:00", end: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
       days: [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,

@@ -499,11 +499,11 @@ function submitOnboarding(){
   let slug=shopSlug||slugify(shopName)||'barbearia';let base=slug,i=1;
   while(DB.get().barbershops.find(s=>s.slug===slug)){slug=base+'-'+(++i);}
   const shopId=DB.uid('shop');
-  DB.insert('barbershops',{id:shopId,slug,name:shopName,ownerName:name,description:'Barbearia cadastrada no Groomin.',logoUrl:'',address:address||'',city:'',neighborhood:'',phone:phone||'',whatsapp:wa||phone||'',email,instagram:'',open:'09:00',close:'19:00',lunchStart:'12:00',lunchEnd:'13:00',planId:planId||'free',status:'active',rating:0,createdAt:Date.now(),slotInterval:30});
+  DB.insert('barbershops',{id:shopId,slug,name:shopName,ownerName:name,description:'Barbearia cadastrada no Groomin.',logoUrl:'',logoPath:'',address:address||'',city:'',neighborhood:'',phone:phone||'',whatsapp:wa||phone||'',email,instagram:'',open:'09:00',close:'19:00',lunchStart:'12:00',lunchEnd:'13:00',planId:planId||'free',status:'active',rating:0,createdAt:Date.now(),slotInterval:30});
   DB.insert('subscriptions',{barbershopId:shopId,planId:planId||'free',status:planId==='free'?'active':'trialing',mrr:plan.price,startedAt:Date.now(),renewsAt:DB.addDays(DB.todayISO(),planId==='free'?0:7)});
   DB.insert('users',{name,email,password:pass,role:'owner',barbershopId:shopId,active:true});
   DB.insert('services',{barbershopId:shopId,name:'Corte Masculino',desc:'Corte personalizado.',price:45,duration:30,category:'Cabelo',icon:'scissors',active:true});
-  DB.insert('barbers',{barbershopId:shopId,name,role:'Proprietário & Barbeiro',photoUrl:'',bio:'',phone:phone||'',email,specialties:['Corte'],commission:0,productCommission:0,isOwner:true,start:'09:00',end:'19:00',lunchStart:'12:00',lunchEnd:'13:00',days:[1,2,3,4,5,6],vacations:[],active:true,rating:5});
+  DB.insert('barbers',{barbershopId:shopId,name,role:'Proprietário & Barbeiro',photoUrl:'',photoPath:'',bio:'',phone:phone||'',email,specialties:['Corte'],commission:0,productCommission:0,isOwner:true,start:'09:00',end:'19:00',lunchStart:'12:00',lunchEnd:'13:00',days:[1,2,3,4,5,6],vacations:[],active:true,rating:5});
   DB.log('Barbearia criada',shopName,shopId);
   Session.login(email,pass);closeModal();toast('Barbearia criada com sucesso! 🎉','ok');
   location.hash='#/dashboard';
