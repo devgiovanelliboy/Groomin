@@ -120,6 +120,7 @@
   };
   window.fbSignIn = (email, password) => A.signInWithEmailAndPassword(FB.auth, email, password);
   window.fbSignOut = () => A.signOut(FB.auth);
+  window.fbSendPasswordReset = (email) => A.sendPasswordResetEmail(FB.auth, email);
 
   // ---------------- CADASTRO DO DONO (bootstrap no cliente) ----------------
   window.fbSignUpOwner = async function ({ shopName, ownerName, email, password, phone, whatsapp, address, slugOverride, planId }) {

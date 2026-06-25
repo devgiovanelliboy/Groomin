@@ -446,7 +446,7 @@ function renderOnbFoot(){
   if(onbStep===2)return `<button class="btn btn-ghost" onclick="onbBack()">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="onbNext()">Próximo ${icon('arrowRight')}</button>`;
   if(onbStep===3)return `<button class="btn btn-ghost" onclick="onbBack()">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="onbNext()">Próximo ${icon('arrowRight')}</button>`;
   const plan=DB.find('plans',onbData.planId)||DB.find('plans','free');
-  return `<button class="btn btn-ghost" onclick="onbBack()">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="submitOnboarding()">${plan.price===0?icon('check')+' Criar minha barbearia':icon('rocket')+' Iniciar teste grátis'}</button>`;
+  return `<button class="btn btn-ghost" onclick="onbBack()">${icon('arrowLeft')} Voltar</button><button id="onb_submit" class="btn btn-primary" onclick="submitOnboarding()">${plan.price===0?icon('check')+' Criar minha barbearia':icon('rocket')+' Iniciar teste grátis'}</button>`;
 }
 
 function onbRefreshContent(){
@@ -490,10 +490,11 @@ function submitOnboarding(){
   const{name,email,pass,shopName,shopSlug,phone,wa,address,planId}=onbData;
   const plan=DB.find('plans',planId)||DB.find('plans','free');
   if(window.__FB_ENABLED){
-    toast('Criando sua barbearia...','info');
+    const btn=$('#onb_submit');const origBtnHTML=btn?btn.innerHTML:null;
+    if(btn){btn.disabled=true;btn.innerHTML='Criando sua barbearia…';}
     fbSignUpOwner({shopName,ownerName:name,email,password:pass,phone:phone||wa,whatsapp:wa||phone,address:address||'',slugOverride:shopSlug,planId:planId||'free'})
       .then(()=>{closeModal();toast('Barbearia criada com sucesso! 🎉','ok');})
-      .catch(err=>toast(/email-already/.test(err.code||'')?'Esse e-mail já está cadastrado.':'Falha ao criar a conta.','err'));
+      .catch(err=>{if(btn&&origBtnHTML){btn.disabled=false;btn.innerHTML=origBtnHTML;}toast(fbErrMsg(err,'signup'),'err');});
     return;
   }
   if(DB.get().users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('Esse e-mail já está cadastrado.','err');onbStep=1;onbRefreshContent();return;}
@@ -513,6 +514,28 @@ function submitOnboarding(){
 /* ============================================================
    LOGIN (single page, role-based redirect)
    ============================================================ */
+function fbErrMsg(err,ctx){
+  const c=err.code||'';
+  if(/network-request-failed/.test(c))return 'Sem conexão. Verifique sua internet.';
+  if(/too-many-requests/.test(c))return 'Muitas tentativas. Aguarde alguns minutos.';
+  if(/invalid-email/.test(c))return 'E-mail inválido.';
+  if(/weak-password/.test(c))return 'Senha fraca. Use no mínimo 6 caracteres.';
+  if(/email-already|already-in-use/.test(c))return 'E-mail já cadastrado.';
+  if(/user-not-found|wrong-password|invalid-credential/.test(c))return 'E-mail ou senha incorretos.';
+  if(/already-exists/.test(c))return 'Esse horário acabou de ser reservado.';
+  if(ctx==='signup')return 'Não foi possível criar sua conta.';
+  if(ctx==='booking')return 'Não foi possível agendar. Tente novamente.';
+  return 'Falha no login. Tente novamente.';
+}
+function doForgotPassword(){
+  if(window.__FB_ENABLED){
+    const email=($('#lg_email')||{}).value?.trim()||'';
+    if(!email||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Digite seu e-mail acima para recuperar a senha.','info');if($('#lg_email'))$('#lg_email').focus();return;}
+    fbSendPasswordReset(email).then(()=>toast('E-mail de recuperação enviado. Verifique sua caixa de entrada.','ok')).catch(err=>toast(fbErrMsg(err,'login'),'err'));
+  }else{
+    toast('Enviamos um link de recuperação para o seu e-mail.','info');
+  }
+}
 function renderLogin(){
   if(Session.user){location.hash=homeRouteFor(Session.effectiveUser.role);return;}
   const loginShopId=sessionStorage.getItem('groomin_login_shop');
@@ -541,10 +564,10 @@ function renderLogin(){
       <div class="field"><label>E-mail</label><div class="input-icon">${icon('mail')}<input class="input" id="lg_email" placeholder="voce@email.com" value="${window.USE_FIREBASE?'':'joao@barbeariadojoao.com'}"></div></div>
       <div class="field"><label>Senha</label><div class="input-icon">${icon('lock')}<input class="input" type="password" id="lg_pass" placeholder="••••••••" value="${window.USE_FIREBASE?'':'owner123'}" onkeydown="if(event.key==='Enter')doLogin()"></div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <label class="checkbox-row" style="font-size:13px"><input type="checkbox" checked> Lembrar de mim</label>
-        <a class="muted" style="font-size:13px;cursor:pointer" onclick="toast('Enviamos um link de recuperação para o seu e-mail.','info')">Esqueci a senha</a>
+        ${window.USE_FIREBASE?'':'<label class="checkbox-row" style="font-size:13px"><input type="checkbox" checked> Lembrar de mim</label>'}
+        <a class="muted" style="font-size:13px;cursor:pointer" onclick="doForgotPassword()">Esqueci a senha</a>
       </div>
-      <button class="btn btn-primary btn-block" onclick="doLogin()">${icon('arrowRight')} Entrar</button>
+      <button id="btn_login" class="btn btn-primary btn-block" onclick="doLogin()">${icon('arrowRight')} Entrar</button>
       ${window.USE_FIREBASE?'':`<div class="divider">contas de demonstração</div>
       <div class="role-demos">
         <button class="role-demo" onclick="fillLogin('super@groomin.com.br','super123')"><b>Super Admin</b>super@groomin.com.br</button>
@@ -566,8 +589,9 @@ function renderSignup(){
 function fillLogin(e,p){$('#lg_email').value=e;$('#lg_pass').value=p;doLogin();}
 function doLogin(){
   const email=$('#lg_email').value.trim(),pass=$('#lg_pass').value;
-  if(window.__FB_ENABLED){ // backend real: Firebase Auth (claims definem tenant/role)
-    fbSignIn(email,pass).catch(err=>toast(/password|credential|user/.test(err.code||'')?'E-mail ou senha incorretos.':'Falha no login.','err'));
+  if(window.__FB_ENABLED){
+    const btn=$('#btn_login');if(btn){btn.disabled=true;btn.innerHTML='Entrando…';}
+    fbSignIn(email,pass).catch(err=>{if(btn){btn.disabled=false;btn.innerHTML=`${icon('arrowRight')} Entrar`;}toast(fbErrMsg(err,'login'),'err');});
     return;
   }
   const u=Session.login(email,pass);

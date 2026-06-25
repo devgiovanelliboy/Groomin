@@ -214,7 +214,7 @@ function renderBookingStep(){
         <div class="summary-line"><span class="muted">Cliente</span><b>${escapeHtml(booking.name)}</b></div>
         <div class="summary-line"><span class="muted">Total</span><b style="color:var(--primary);font-size:18px">${money(svc.price)}</b></div>
       </div>
-      <div style="margin-top:18px;display:flex;justify-content:space-between"><button class="btn btn-ghost" onclick="bookGo(5)">${icon('arrowLeft')} Voltar</button><button class="btn btn-primary" onclick="confirmBooking()">${icon('check')} Confirmar</button></div>`;
+      <div style="margin-top:18px;display:flex;justify-content:space-between"><button class="btn btn-ghost" onclick="bookGo(5)">${icon('arrowLeft')} Voltar</button><button id="btn_confirm" class="btn btn-primary" onclick="confirmBooking()">${icon('check')} Confirmar</button></div>`;
   }
 }
 function pickService(id){booking.service=id;renderBookingStep();setTimeout(()=>bookGo(2),160);}
@@ -237,8 +237,9 @@ function submitBookingData(){
 function confirmBooking(){
   const shopId=booking.shopId,svc=DB.find('services',booking.service);
   const bid0=booking.barber==='any'?firstAvailableBarber(shopId,booking.date,booking.time,svc.duration):booking.barber;
-  if(window.__FB_ENABLED){ // booking público seguro via Cloud Function (valida e grava no servidor)
+  if(window.__FB_ENABLED){
     if(!bid0){toast('Horário indisponível. Escolha outro.','err');booking.step=4;renderBooking();return;}
+    const btn=$('#btn_confirm');if(btn){btn.disabled=true;btn.innerHTML=`${icon('clock')} Confirmando…`;}
     const _u=Session.effectiveUser;
     const _loggedCustId=(_u&&_u.role==='customer'&&_u.barbershopId===shopId)?_u.customerId:undefined;
     const _rescheduleId=booking._reschedule||null;
@@ -252,7 +253,7 @@ function confirmBooking(){
         // reflita o novo item quando o usuário fechar o modal (já está em #/my-appointments)
         setTimeout(()=>{ if(window.renderCustomer)renderCustomer(); },300);
       })
-      .catch(err=>{toast(/already-exists/.test(err.code||'')?'Esse horário acabou de ser reservado.':'Não foi possível agendar.','err');booking.step=4;renderBooking();});
+      .catch(err=>{if(btn){btn.disabled=false;btn.innerHTML=`${icon('check')} Confirmar`;}toast(fbErrMsg(err,'booking'),'err');booking.step=4;renderBooking();});
     return;
   }
   const bid=bid0;
@@ -299,10 +300,10 @@ function createCustomerAccount(shopId,custId){
   const cust=DB.find('customers',custId);const email=$('#ac_email').value.trim(),pass=$('#ac_pass').value;
   if(pass.length<6){$('#ac_pass').closest('.field').classList.add('invalid');return;}
   if(window.__FB_ENABLED){
-    toast('Criando conta…','info');
+    const btn=document.querySelector('.modal-foot .btn-primary');if(btn){btn.disabled=true;btn.textContent='Criando conta…';}
     fbSignUpCustomer({name:cust.name,email,password:pass,phone:cust.phone||'',tenantId:shopId})
       .then(()=>{closeModal();toast('Conta criada! 🎉','ok');location.hash='#/my-appointments';})
-      .catch(err=>toast(/email-already/.test(err.code||'')?'E-mail já cadastrado.':'Erro ao criar conta.','err'));
+      .catch(err=>{if(btn){btn.disabled=false;btn.textContent='Criar conta';}toast(fbErrMsg(err,'signup'),'err');});
     return;
   }
   if(DB.get().users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('E-mail já cadastrado.','err');return;}
@@ -326,8 +327,8 @@ function openPublicCustomerLogin(shopId){
          <div class="field"><label>Senha *</label><input class="input" type="password" id="pcl_pass" placeholder="Mínimo 6 caracteres"><div class="err">Mínimo 6 caracteres.</div></div>
          <p style="font-size:13px;margin-top:10px" class="muted">Já tem conta? <a style="color:var(--primary);cursor:pointer" onclick="window._pclTab='login';pclRe()">Entrar →</a></p>`;
     const foot=tab==='login'
-      ?`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="pclSubmit('login','${shopId}')">Entrar</button>`
-      :`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="pclSubmit('register','${shopId}')">Criar conta</button>`;
+      ?`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button id="pcl_btn" class="btn btn-primary" onclick="pclSubmit('login','${shopId}')">Entrar</button>`
+      :`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button id="pcl_btn" class="btn btn-primary" onclick="pclSubmit('register','${shopId}')">Criar conta</button>`;
     openModal(`<div class="modal-head"><div><h3>${tab==='login'?icon('user')+' Entrar':icon('userPlus')+' Criar conta'}</h3><div class="sub">Gerencie seus agendamentos</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
     <div class="modal-body" id="pcl_body">${body}</div>
     <div class="modal-foot" id="pcl_foot">${foot}</div>`);
@@ -341,11 +342,11 @@ function pclSubmit(action,shopId){
     const ok=/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)&&pass.length>=6;
     if(!ok){toast('Confira e-mail e senha.','err');return;}
     if(window.__FB_ENABLED){
+      const btn=$('#pcl_btn');if(btn){btn.disabled=true;btn.innerHTML='Entrando…';}
       sessionStorage.setItem('groomin_intended','#/my-appointments');
-      toast('Entrando…','info');
       fbSignIn(email,pass)
         .then(()=>{closeModal();})
-        .catch(err=>{sessionStorage.removeItem('groomin_intended');toast(/wrong-password|user-not-found|invalid-credential/.test(err.code||'')?'E-mail ou senha incorretos.':'Erro ao entrar.','err');});
+        .catch(err=>{if(btn){btn.disabled=false;btn.innerHTML='Entrar';}sessionStorage.removeItem('groomin_intended');toast(fbErrMsg(err,'login'),'err');});
       return;
     }
     if(!Session.login(email,pass)){toast('E-mail ou senha incorretos.','err');return;}
@@ -359,11 +360,11 @@ function pclSubmit(action,shopId){
   inv('pcl_name',name.length<2);inv('pcl_email',!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email));inv('pcl_pass',pass.length<6);
   if(!ok){toast('Confira os campos destacados.','err');return;}
   if(window.__FB_ENABLED){
-    toast('Criando conta…','info');
+    const btn=$('#pcl_btn');if(btn){btn.disabled=true;btn.innerHTML='Criando conta…';}
     sessionStorage.setItem('groomin_intended','#/my-appointments');
     fbSignUpCustomer({name,email,password:pass,phone,tenantId:shopId})
       .then(()=>{closeModal();toast('Conta criada! 🎉','ok');})
-      .catch(err=>{sessionStorage.removeItem('groomin_intended');toast(/email-already/.test(err.code||'')?'E-mail já cadastrado.':'Erro ao criar conta.','err');});
+      .catch(err=>{if(btn){btn.disabled=false;btn.innerHTML='Criar conta';}sessionStorage.removeItem('groomin_intended');toast(fbErrMsg(err,'signup'),'err');});
     return;
   }
   if(DB.get().users.find(u=>u.email.toLowerCase()===email.toLowerCase())){toast('E-mail já cadastrado.','err');return;}
