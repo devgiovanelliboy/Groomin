@@ -43,9 +43,16 @@ function platformAnalytics(){
   for(let i=5;i>=0;i--){const dt=new Date();dt.setMonth(dt.getMonth()-i);months.push(MON[dt.getMonth()]);
     const factor=1-(i*0.12);mrrSeries.push(Math.round(mrr*factor));shopSeries.push(Math.max(1,Math.round(d.barbershops.length*factor)));}
   const growth=mrrSeries.length>1&&mrrSeries[mrrSeries.length-2]?Math.round((mrrSeries[mrrSeries.length-1]-mrrSeries[mrrSeries.length-2])/mrrSeries[mrrSeries.length-2]*100):0;
+  const planRevenue=d.plans.map(p=>{
+    const active=activeShops.filter(s=>s.planId===p.id).length;
+    const free=d.barbershops.filter(s=>s.planId===p.id&&s.status!=='active').length;
+    return {id:p.id,name:p.name,color:p.color,price:p.price,active,free,subtotal:p.price*active};
+  }).filter(p=>d.barbershops.some(s=>s.planId===p.id));
+  const freeCount=activeShops.filter(s=>s.planId==='free').length;
+  const potentialMrr=activeShops.filter(s=>s.planId!=='free').reduce((sum,s)=>{const p=d.plans.find(pl=>pl.id===s.planId);return sum+(p?p.price:0);},0);
   return {totalShops:d.barbershops.length,activeShops:activeShops.length,totalCustomers:d.customers.length,totalAppts:d.appointments.length,
-    activeSubs:activeSubs.length,mrr,churn,growth,months,mrrSeries,shopSeries,
-    planDist:d.plans.map(p=>({name:p.name,count:d.barbershops.filter(s=>s.planId===p.id).length}))};
+    activeSubs:activeSubs.length,mrr,churn,growth,months,mrrSeries,shopSeries,freeCount,potentialMrr,
+    planDist:d.plans.map(p=>({name:p.name,count:d.barbershops.filter(s=>s.planId===p.id).length})),planRevenue};
 }
 function slugify(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
 

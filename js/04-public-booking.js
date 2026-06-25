@@ -147,15 +147,6 @@ function publicShell(inner){
    ============================================================ */
 let booking={};
 function startBooking(shopId,serviceId,barberId){
-  if(window.__FB_ENABLED){
-    const u=Session.effectiveUser;
-    if(!(u&&u.role==='customer')){
-      window._pendingBooking={shopId,serviceId:serviceId||null,barberId:barberId||null};
-      sessionStorage.setItem('groomin_login_shop',shopId);
-      toast('Entre na sua conta para agendar.','info');
-      openPublicCustomerLogin(shopId);return;
-    }
-  }
   booking={shopId,service:serviceId||null,barber:barberId||null,date:null,time:null,assignedBarber:null,name:'',phone:'',email:'',step:1};
   const u=Session.effectiveUser;
   if(u&&u.role==='customer'){
@@ -199,7 +190,7 @@ function renderBookingStep(){
       <div style="margin-top:18px"><button class="btn btn-ghost" onclick="bookGo(3)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===5){
     const _u5=Session.effectiveUser;
-    if(window.__FB_ENABLED&&_u5&&_u5.role==='customer'){
+    if(window.__FB_ENABLED&&_u5&&_u5.role==='customer'&&booking.phone&&booking.phone.replace(/\D/g,'').length>=8){
       c.innerHTML=`<h4 style="margin-bottom:14px">Confirmando como</h4>
         <div class="card" style="padding:16px;margin-bottom:16px">
           <div class="summary-line"><span class="muted">Nome</span><b>${escapeHtml(booking.name||'—')}</b></div>
@@ -384,6 +375,7 @@ function pclSubmit(action,shopId){
   const inv=(id,bad)=>{const el=$('#'+id);if(el)el.closest('.field').classList.toggle('invalid',bad);if(bad)ok=false;};
   inv('pcl_name',name.length<2);inv('pcl_email',!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email));inv('pcl_pass',pass.length<6);
   if(!ok){toast('Confira os campos destacados.','err');return;}
+  if(window.__FB_ENABLED&&phone.replace(/\D/g,'').length<8){toast('Informe seu WhatsApp (mínimo 8 dígitos).','err');const el=$('#pcl_phone');if(el)el.focus();return;}
   if(window.__FB_ENABLED){
     const btn=$('#pcl_btn');if(btn){btn.disabled=true;btn.innerHTML='Criando conta…';}
     sessionStorage.setItem('groomin_intended','#/my-appointments');
@@ -410,11 +402,28 @@ function renderCustomer(){
   const shop=DB.find('barbershops',u.barbershopId);
   if(!cust||!shop){
     if(window.__FB_ENABLED&&u.barbershopId){
+      if(window._custLoadFailed||!u.customerId){
+        $('#root').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">${icon('alert')}<p style="font-size:15px;font-weight:600;margin:0">Não conseguimos carregar seus dados</p><p class="muted" style="font-size:13px;max-width:280px;text-align:center;margin:0">Problema de conexão ou conta sem perfil vinculado. Tente recarregar ou sair.</p><div style="display:flex;gap:10px"><button class="btn btn-ghost btn-sm" onclick="logoutTo('#/')">Sair</button><button class="btn btn-primary btn-sm" onclick="window._custLoadFailed=false;location.reload()">Recarregar</button></div></div>`;
+        return;
+      }
       $('#root').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px"><div class="skeleton" style="width:48px;height:48px;border-radius:50%"></div><div class="skeleton" style="width:200px;height:16px;border-radius:6px"></div><p class="muted" style="font-size:13px">Carregando seus agendamentos…</p></div>`;
+      // fallback: busca direta se onSnapshot não hidratar em 4s; após 1 tentativa, exibe erro
+      if(!window._custLoadFallback){
+        window._custLoadFallback=setTimeout(async()=>{
+          window._custLoadFallback=null;
+          try{
+            if(window.fbFetchCustomerCache)await window.fbFetchCustomerCache(u.uid,u.barbershopId,u.customerId);
+          }catch(e){console.warn('[renderCustomer fallback]',e);}
+          window._custLoadFailed=true;
+          renderCustomer();
+        },4000);
+      }
       return;
     }
     location.hash='#/';return;
   }
+  window._custLoadFailed=false;
+  if(window._custLoadFallback){clearTimeout(window._custLoadFallback);window._custLoadFallback=null;}
   const t=DB.todayISO();
   const all=DB.scope('appointments',u.barbershopId).filter(a=>a.customerId===u.customerId).sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
   const list=custTab==='proximos'?all.filter(a=>a.date>=t&&a.status!=='cancelado'&&a.status!=='concluido'):all;

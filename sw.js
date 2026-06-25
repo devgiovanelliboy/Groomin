@@ -2,7 +2,7 @@
    Estratégia: precache do app shell + stale-while-revalidate para o resto
    (inclui CDNs de fonte e Chart.js, cacheados na primeira visita online).
 */
-const VERSION = 'barberos-v6';
+const VERSION = 'barberos-v14';
 const APP_SHELL = [
   './',
   './index.html',
@@ -37,6 +37,8 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => clients.forEach((c) => c.postMessage({ type: 'SW_UPDATED' })))
   );
 });
 

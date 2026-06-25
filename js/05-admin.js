@@ -120,6 +120,30 @@ function adminDash(a){
     ${statCard('c5','down','Churn',a.churn+'%','contas suspensas',a.churn>5?'down':'up')}
     ${statCard('c3','activity','Uso','98%','uptime da plataforma')}
   </div>
+  <div class="panel" style="margin-bottom:20px">
+    <div class="panel-head">
+      <div><h3>${icon('dollar')} Receita mensal por plano</h3><div class="sub">Barbearias ativas × valor do plano</div></div>
+      <span class="badge ok" style="font-size:15px;padding:6px 14px"><b>${money(a.mrr)}/mês</b></span>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Plano</th><th style="text-align:center">Barbearias ativas</th><th style="text-align:right">Valor/mês</th><th style="text-align:right">Subtotal</th></tr></thead>
+      <tbody>
+        ${a.planRevenue.map(p=>`<tr>
+          <td><span class="badge ${p.color}">${p.name}</span></td>
+          <td style="text-align:center"><b>${p.active}</b></td>
+          <td style="text-align:right;color:var(--muted)">${p.price===0?'Grátis':money(p.price)}</td>
+          <td style="text-align:right"><b>${p.price===0?'—':money(p.subtotal)}</b></td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid var(--line);font-weight:700">
+          <td>Total</td>
+          <td style="text-align:center">${a.activeShops}</td>
+          <td style="text-align:right;color:var(--muted)">—</td>
+          <td style="text-align:right;color:var(--primary);font-size:16px">${money(a.mrr)}</td>
+        </tr>
+      </tbody>
+    </table></div>
+    ${a.freeCount>0?`<div class="insight info" style="margin-top:12px"><span class="ii">${icon('trending')}</span><div><b>${a.freeCount} barbearia(s) no plano Grátis</b><p>Potencial de conversão: até ${money(a.freeCount*69)}/mês no plano Growth.</p></div></div>`:''}
+  </div>
   <div class="dash-cols">
     <div class="panel"><div class="panel-head"><div><h3>Evolução do MRR</h3><div class="sub">Receita recorrente mensal (R$)</div></div><span class="badge ok">${icon('trending')} ${(a.growth>=0?'+':'')+a.growth}%</span></div><div class="chart-wrap"><canvas id="admMrr"></canvas></div></div>
     <div class="panel"><div class="panel-head"><h3>Distribuição por plano</h3></div><div class="chart-wrap chart-sm"><canvas id="admPlans"></canvas></div></div>
@@ -138,14 +162,17 @@ function adminDashCharts(a){
 }
 function adminShops(){
   const shops=DB.all('barbershops');
+  const emptyState=shops.length===0?`<tr><td colspan="6" style="text-align:center;padding:48px 0;color:var(--muted)">
+    ${window.__FB_ENABLED?`${icon('clock')} Aguardando dados do Firestore… Se demorar mais de 5s, recarregue a página.`:'Nenhuma barbearia cadastrada.'}
+  </td></tr>`:'';
   return `<div class="page-head"><div><h2>Barbearias</h2><p>${shops.length} barbearias na plataforma</p></div><div class="page-actions"><button class="btn btn-primary" onclick="adminShopForm()">${icon('plus')} Nova barbearia</button></div></div>
   <div class="table-wrap"><table><thead><tr><th>Barbearia</th><th>Proprietário</th><th>Plano</th><th>Status</th><th>Criada em</th><th></th></tr></thead><tbody>
-  ${shops.map(s=>{const plan=DB.find('plans',s.planId);return `<tr>
+  ${emptyState}${shops.map(s=>{const plan=DB.find('plans',s.planId)||{name:'—',color:'muted'};return `<tr>
     <td><div class="t-user"><div class="av">${initials(s.name)}</div><div><b>${escapeHtml(s.name)}</b><small>/${escapeHtml(s.slug)}</small></div></div></td>
     <td>${escapeHtml(s.ownerName||'—')}</td>
     <td><span class="badge ${plan.color}">${plan.name}</span></td>
     <td><span class="badge ${s.status==='active'?'ok':'danger'}">${s.status==='active'?'Ativa':'Suspensa'}</span></td>
-    <td>${fmtDateShort(new Date(s.createdAt).toISOString().slice(0,10))}</td>
+    <td>${s.createdAt?fmtDateShort(new Date(s.createdAt).toISOString().slice(0,10)):'—'}</td>
     <td><div class="row-actions">
       <button class="ra" title="Ver página" onclick="Router.go('#/'+'${s.slug}')">${icon('eye')}</button>
       <button class="ra" title="Acessar como dono (suporte)" onclick="adminLoginAs('${s.id}')">${icon('user')}</button>
@@ -260,12 +287,32 @@ function adminSubs(){
   const entShops=DB.all('barbershops').filter(s=>s.planId==='enterprise');
   const entMrr=subs.filter(s=>s.planId==='enterprise').reduce((a,s)=>a+s.mrr,0);
   return `<div class="page-head"><div><h2>Assinaturas</h2><p>Planos e contratos ativos</p></div></div>
-  <div class="pricing-grid" style="margin-bottom:18px">${plans.map(p=>{const count=DB.all('barbershops').filter(s=>s.planId===p.id).length;return `<div class="price-card ${p.id==='pro'?'featured':''}"><h3>${p.name}</h3><div class="pc-price">${p.price===0?'Grátis':'R$ '+p.price}${p.price>0?'<small>/mês</small>':''}</div><div class="pc-desc">${count} barbearia(s) · ${moneyK(p.price*count)} MRR</div><ul>${p.features.slice(0,3).map(f=>`<li>${icon('check')} ${escapeHtml(f)}</li>`).join('')}</ul></div>`;}).join('')}
+  <div class="pricing-grid" style="margin-bottom:18px">${plans.map(p=>{const count=DB.all('barbershops').filter(s=>s.planId===p.id).length;return `<div class="price-card ${p.id==='pro'?'featured':''}"><div style="display:flex;justify-content:space-between;align-items:flex-start"><h3>${p.name}</h3><button class="btn btn-ghost btn-sm" onclick="adminEditPlan('${p.id}')" style="font-size:11px;padding:2px 8px">${icon('edit')} Editar</button></div><div class="pc-price">${p.price===0?'Grátis':'R$ '+p.price}${p.price>0?'<small>/mês</small>':''}</div><div class="pc-desc">${count} barbearia(s) · ${moneyK(p.price*count)} MRR</div><ul>${p.features.slice(0,3).map(f=>`<li>${icon('check')} ${escapeHtml(f)}</li>`).join('')}</ul></div>`;}).join('')}
     <div class="price-card" style="border-color:var(--primary)"><span class="pc-tag">Sob medida</span><h3>${icon('building')} Enterprise</h3><div class="pc-price" style="font-size:30px">${entShops.length}<small> contas</small></div><div class="pc-desc">${moneyK(entMrr)} MRR · preços e limites personalizados</div><ul><li>${icon('check')} Limites customizados</li><li>${icon('check')} Recursos sob demanda</li></ul></div>
   </div>
   <div class="panel"><div class="panel-head"><h3>Contratos</h3></div><div class="table-wrap"><table><thead><tr><th>Barbearia</th><th>Plano</th><th>Status</th><th>MRR</th><th>Renova em</th><th></th></tr></thead><tbody>
   ${subs.map(s=>{const shop=DB.find('barbershops',s.barbershopId);const plan=DB.find('plans',s.planId);if(!shop)return'';const stCls={active:'ok',trialing:'info',past_due:'danger',canceled:'muted'}[s.status];const stLbl={active:'Ativa',trialing:'Trial',past_due:'Em atraso',canceled:'Cancelada'}[s.status];const isEnt=s.planId==='enterprise';return `<tr><td><b>${escapeHtml(shop.name)}</b></td><td><span class="badge ${plan.color}">${plan.name}</span>${isEnt?` <span class="badge gold">${icon('building')}</span>`:''}</td><td><span class="badge ${stCls}">${stLbl}</span></td><td>${money(s.mrr)}</td><td>${fmtDate(s.renewsAt)}</td><td>${isEnt?`<button class="btn btn-sm btn-ghost" onclick="enterpriseForm('${shop.id}')">Editar</button>`:''}</td></tr>`;}).join('')}
   </tbody></table></div></div>`;
+}
+function adminEditPlan(planId){
+  const p=DB.find('plans',planId);if(!p||p.enterprise)return;
+  openModal(`<div class="modal-head"><div><h3>${icon('edit')} Editar plano</h3><div class="sub">${escapeHtml(p.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body">
+    <div class="form-row">
+      <div class="field"><label>Nome do plano</label><input class="input" id="ep_name" value="${escapeHtml(p.name)}"></div>
+      <div class="field"><label>Preço mensal (R$)</label><input class="input" type="number" min="0" id="ep_price" value="${p.price}" placeholder="0 = Grátis"></div>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin-top:8px">Alterar o preço atualiza o MRR exibido no dashboard. Assinaturas existentes não são cobradas retroativamente.</p>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveAdminPlan('${planId}')">${icon('check')} Salvar</button></div>`);
+}
+function saveAdminPlan(planId){
+  const name=$('#ep_name').value.trim();const price=+$('#ep_price').value||0;
+  if(!name){toast('Informe o nome do plano.','err');return;}
+  DB.update('plans',planId,{name,price});
+  DB.all('subscriptions').filter(s=>s.planId===planId&&s.planId!=='enterprise').forEach(s=>DB.update('subscriptions',s.id,{mrr:price}));
+  DB.log('Plano editado',`${planId} → ${name} R$${price}/mês`);
+  closeModal();toast('Plano atualizado.','ok');renderAdmin({sub:'subscriptions'});
 }
 function adminBilling(){
   const invoices=DB.all('invoices').slice().sort((a,b)=>b.date.localeCompare(a.date));

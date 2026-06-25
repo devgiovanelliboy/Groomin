@@ -20,9 +20,11 @@
         try{ if('sync' in reg){ reg.sync.register('groomin-sync').catch(()=>{}); } }catch(e){}
       }).catch(()=>{});
     });
-    // SW pede refresh (sync/periodicsync) -> revalida a tela
+    // SW pede refresh (sync/periodicsync) -> revalida a tela; SW_UPDATED -> banner
     navigator.serviceWorker.addEventListener('message',(ev)=>{
-      if(ev.data&&(ev.data.type==='SYNC'||ev.data.type==='REFRESH')&&window.Router&&location.hash){Router.render();}
+      if(!ev.data)return;
+      if(ev.data.type==='SW_UPDATED'){showUpdateBanner();return;}
+      if((ev.data.type==='SYNC'||ev.data.type==='REFRESH')&&window.Router&&location.hash){Router.render();}
     });
   }
   // Habilitar notificações push (FCM) — chamado sob demanda quando o Firebase está ligado

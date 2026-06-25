@@ -24,7 +24,7 @@ window.FCM_VAPID_KEY = "";
 
 // App Check (Firebase Console → App Check → Web app → reCAPTCHA Enterprise/v3).
 // Preencha com a site key e publique novamente; vazio mantém compatibilidade durante setup.
-window.FIREBASE_APPCHECK_SITE_KEY = "";
+window.FIREBASE_APPCHECK_SITE_KEY = "6Lef2zMtAAAAAERjyfZ2GLiWKpmZLz3VQqWis-cM";
 
 // true = backend Firebase real | false = modo demo (localStorage)
 window.USE_FIREBASE = true;

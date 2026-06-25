@@ -38,8 +38,8 @@ function renderDashboard(r){
       // Fallback: se em 8s ainda não chegou, algo deu errado
       if(!window._dashLoadTimeout) window._dashLoadTimeout=setTimeout(()=>{
         window._dashLoadTimeout=null;
-        if(!dashShop()){toast('Não foi possível carregar a barbearia. Tente recarregar.','err');}
-      },8000);
+        if(!dashShop()){toast('Não foi possível carregar a barbearia. Verifique sua conexão e recarregue.','err');}
+      },6000);
       return;
     }
     toast('Conta sem barbearia vinculada.','err');location.hash=Session.effectiveUser?'#/login':'#/';return;
@@ -61,7 +61,7 @@ function renderDashboard(r){
 }
 
 /* ---------- Booking URL helpers ---------- */
-function shopPublicUrl(slug){return window.location.origin+'/#/'+slug;}
+function shopPublicUrl(slug){return 'https://groomin.com.br/#/'+slug;}
 function bookingUrlCard(shop){
   const fullUrl=shopPublicUrl(shop.slug);
   const displayUrl=fullUrl.replace(/^https?:\/\//,'');
@@ -599,9 +599,9 @@ function dashSubscription(shop){
   <div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(212,175,55,.07),transparent),var(--surface)">
     <div class="panel-head">
       <div><h3>${e.isEnterprise?icon('building')+' ':''}Plano atual: <b>${escapeHtml(e.planName)}</b></h3><span class="badge ${stCls}">${stLabel}</span></div>
-      ${!e.isEnterprise?`<button class="btn btn-primary btn-sm" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Solicitar mudança</button>`:''}
+      ${!e.isEnterprise?`<button class="btn btn-primary btn-sm" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`:''}
     </div>
-    ${isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu trial termina em ${fmtDate(renewsAt)}. Solicite a assinatura para não perder o acesso aos recursos.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Solicitar assinatura</button></div>`:''}
+    ${isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu trial termina em ${fmtDate(renewsAt)}. Faça upgrade para não perder o acesso aos recursos.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Ativar agora</button></div>`:''}
     <div class="form-row three" style="margin-top:14px">
       <div class="summary-line"><span class="muted">Plano</span><b>${escapeHtml(plan.name)}</b></div>
       <div class="summary-line"><span class="muted">Status</span><b>${stLabel}</b></div>
@@ -629,7 +629,9 @@ function dashSubscription(shop){
         <ul>${p.features.slice(0,4).map(f=>`<li>${icon('check')} ${escapeHtml(f)}</li>`).join('')}</ul>
         ${isCurrent
           ?`<button class="btn btn-outline btn-block" disabled>Plano atual</button>`
-          :`<button class="btn ${p.price>(plan.price||0)?'btn-primary':'btn-ghost'} btn-block" onclick="requestPlanChange('${shop.id}','${p.id}')">${p.price>(plan.price||0)?icon('rocket')+' Solicitar upgrade':icon('down')+' Solicitar downgrade'}</button>`}
+          :p.price>(plan.price||0)
+            ?`<button class="btn btn-primary btn-block" onclick="applyPlanUpgrade('${shop.id}','${p.id}')">${icon('rocket')} Fazer upgrade</button>`
+            :`<button class="btn btn-ghost btn-block" onclick="requestPlanDowngrade('${shop.id}','${p.id}')">${icon('down')} Solicitar downgrade</button>`}
       </div>`;}).join('')}
   </div>
 
@@ -638,25 +640,47 @@ function dashSubscription(shop){
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       ${e.isEnterprise
         ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com comercial</a>`
-        :`<button class="btn btn-primary" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Solicitar mudança</button>`}
+        :`<button class="btn btn-primary" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`}
       ${sub.status!=='canceled'&&shop.planId!=='free'?`<button class="btn btn-ghost" style="color:var(--danger)" onclick="confirmAction('Cancelar assinatura?','Você terá acesso até o fim do ciclo atual. Entre em contato para confirmar.',()=>{toast('Para cancelar, escreva para contato@groomin.com.br','info');})">${icon('x')} Cancelar assinatura</button>`:''}
     </div>
   </div>`;
 }
 function openPlanSelectorOwner(shopId){
   const shop=DB.find('barbershops',shopId);
-  openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Solicitar mudança de plano</h3><div class="sub">${escapeHtml(shop.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
-  <div class="modal-body"><p class="muted" style="margin-bottom:12px">A mudança é confirmada pelo comercial antes de liberar recursos e cobrança.</p><div class="grid" style="gap:10px">${DB.all('plans').filter(p=>!p.enterprise).map(p=>`<div class="select-item ${shop.planId===p.id?'sel':''}" onclick="requestPlanChange('${shopId}','${p.id}')"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="t">${escapeHtml(p.name)}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div><div class="p">${p.price===0?'Grátis':money(p.price)+'/mês'}</div></div></div>`).join('')}</div>
-  <p class="muted" style="font-size:12.5px;margin-top:12px">Plano Enterprise e cancelamento: contato@groomin.com.br</p></div>`);
+  const currentPlan=DB.find('plans',shop.planId)||{price:0};
+  openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Mudar plano</h3><div class="sub">${escapeHtml(shop.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body"><div class="grid" style="gap:10px">${DB.all('plans').filter(p=>!p.enterprise).map(p=>{
+    const isCurrent=shop.planId===p.id;
+    const isUpgrade=p.price>(currentPlan.price||0);
+    const action=isCurrent?''
+      :isUpgrade?`onclick="applyPlanUpgrade('${shopId}','${p.id}')"`
+      :`onclick="requestPlanDowngrade('${shopId}','${p.id}')"`;
+    return `<div class="select-item ${isCurrent?'sel':''}" ${isCurrent?'':action} style="${isCurrent?'cursor:default':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div class="t">${escapeHtml(p.name)}${isCurrent?' <span class="badge ok" style="font-size:10px">atual</span>':''}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div>
+        <div class="p">${p.price===0?'Grátis':money(p.price)+'/mês'}</div>
+      </div></div>`;}).join('')}</div>
+  <p class="muted" style="font-size:12.5px;margin-top:12px">Upgrade é ativado imediatamente. Downgrade e cancelamento: contato@groomin.com.br</p></div>`);
 }
-function requestPlanChange(shopId,planId){
+function applyPlanUpgrade(shopId,planId){
   const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId);
   if(!shop||!plan)return;
-  const subject=encodeURIComponent(`Solicitação de plano — ${shop.name}`);
-  const body=encodeURIComponent(`Olá! Gostaria de solicitar o plano ${plan.name} para a barbearia ${shop.name} (ID: ${shopId}).\n\nE-mail de contato: ${shop.email||''}`);
+  DB.update('barbershops',shopId,{planId});
+  const sub=shopSubscription(shopId);
+  if(sub)DB.update('subscriptions',sub.id,{planId,mrr:plan.price,status:'active'});
+  DB.log('Upgrade de plano',`${shopId} → ${planId}`);
+  closeModal();
+  toast(`Plano ${plan.name} ativado! Aproveite os novos recursos.`,'ok');
+  renderDashboard({sub:'assinatura'});
+}
+function requestPlanDowngrade(shopId,planId){
+  const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId);
+  if(!shop||!plan)return;
+  const subject=encodeURIComponent(`Solicitação de downgrade — ${shop.name}`);
+  const body=encodeURIComponent(`Olá! Gostaria de solicitar o downgrade para o plano ${plan.name} da barbearia ${shop.name} (ID: ${shopId}).\n\nE-mail de contato: ${shop.email||''}`);
   closeModal();
   location.href=`mailto:contato@groomin.com.br?subject=${subject}&body=${body}`;
-  toast('Sua solicitação de plano está pronta para envio.','info');
+  toast('E-mail de solicitação de downgrade preparado.','info');
 }
 
 /* ============================================================

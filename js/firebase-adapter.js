@@ -95,7 +95,9 @@
     render();
   }
   async function buildSession(user) {
-    const snap = await F.getDoc(F.doc(FB.db, "users", user.uid));
+    let snap;
+    try { snap = await F.getDoc(F.doc(FB.db, "users", user.uid)); }
+    catch(e) { console.error("[Groomin] buildSession getDoc falhou:", e.code, e.message); return null; }
     if (!snap.exists()) {
       if (!window._fbSigningUp && window.toast) toast("Perfil não encontrado. Tente criar a conta novamente.", "err");
       console.warn("[Groomin] /users/" + user.uid + " não existe no Firestore.");
@@ -110,6 +112,7 @@
       email: user.email, role: d.role || "customer",
       barbershopId: d.tenantId || null, customerId: d.customerId || null, active: d.active !== false,
     };
+    console.log("[Groomin] buildSession ok:", su.role, "tid:", su.barbershopId, "cid:", su.customerId);
     sessionStorage.setItem("groomin_user", JSON.stringify(su));
     return su;
   }
@@ -138,46 +141,57 @@
     const plan = (typeof DB !== "undefined" && DB.find) ? DB.find("plans", pid) : null;
     const mrr = plan ? (plan.price || 0) : 0;
 
-    // slug único
+    // slug único (só leituras — regra de escrita do slug exige tenant existir primeiro)
     let base = slugifyStr(slugOverride || shopName) || "barbearia", slug = base, n = 1;
     while ((await getDoc(doc(FB.db, "slugs", slug))).exists()) slug = base + "-" + (++n);
-    await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
-    const tenantPayload = {
-      name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
-      description: "Barbearia cadastrada no Groomin.", logoUrl: "", logoPath: "",
-      phone: phone || "", whatsapp: whatsapp || phone || "",
-      email, address: address || "", city: "", neighborhood: "", instagram: "",
-      open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
-      slotInterval: 30, status: "active", planId: pid, rating: 0, createdAt: Date.now(),
-    };
-    await setDoc(tRef, tenantPayload);
-    // Hidrata local DB imediatamente com o plano correto (sem aguardar onSnapshot)
-    try { const d = DB.get(); upsert(d.barbershops, { id: tid, ...tenantPayload }); DB.save(); } catch (_) {}
-    await setDoc(doc(FB.db, "users", uid), {
-      name: ownerName || "Dono", email, role: "owner", tenantId: tid, active: true, createdAt: Date.now(),
-    });
-    const trialDays = pid === "free" ? 0 : 7;
-    const subPayload = {
-      tenantId: tid, planId: pid,
-      status: pid === "free" ? "active" : "trialing",
-      mrr, startedAt: Date.now(),
-      renewsAt: Date.now() + trialDays * 86400000,
-    };
-    await setDoc(doc(FB.db, "subscriptions", tid), subPayload);
-    // Hidrata assinatura local imediatamente (shopSubscription filtra por barbershopId)
-    try { const d = DB.get(); upsert(d.subscriptions, { id: tid, barbershopId: tid, ...subPayload }); DB.save(); } catch (_) {}
 
-    await addDoc(collection(FB.db, "tenants", tid, "services"), {
-      tenantId: tid, barbershopId: tid, name: "Corte Masculino", desc: "Corte personalizado.",
-      price: 45, duration: 30, category: "Cabelo", icon: "scissors", active: true,
-    });
-    await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
-      tenantId: tid, barbershopId: tid, name: ownerName || "Barbeiro",
-      role: "Proprietário & Barbeiro", photoUrl: "", photoPath: "", bio: "", phone: phone || "", email,
-      specialties: ["Corte"], commission: 0, productCommission: 0, isOwner: true,
-      start: "09:00", end: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
-      days: [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
-    });
+    try {
+      // tenant PRIMEIRO — regra do slug faz get(tenant) para validar ownerUid
+      const tenantPayload = {
+        name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
+        description: "Barbearia cadastrada no Groomin.", logoUrl: "", logoPath: "",
+        phone: phone || "", whatsapp: whatsapp || phone || "",
+        email, address: address || "", city: "", neighborhood: "", instagram: "",
+        open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
+        slotInterval: 30, status: "active", planId: pid, rating: 0, createdAt: Date.now(),
+      };
+      await setDoc(tRef, tenantPayload);
+      // Hidrata local DB imediatamente com o plano correto (sem aguardar onSnapshot)
+      try { const d = DB.get(); upsert(d.barbershops, { id: tid, ...tenantPayload }); DB.save(); } catch (_) {}
+
+      // slug depois do tenant (regra valida tenant.ownerUid == uid)
+      await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
+
+      await setDoc(doc(FB.db, "users", uid), {
+        name: ownerName || "Dono", email, role: "owner", tenantId: tid, active: true, createdAt: Date.now(),
+      });
+      const trialDays = pid === "free" ? 0 : 7;
+      const subPayload = {
+        tenantId: tid, planId: pid,
+        status: pid === "free" ? "active" : "trialing",
+        mrr, startedAt: Date.now(),
+        renewsAt: Date.now() + trialDays * 86400000,
+      };
+      await setDoc(doc(FB.db, "subscriptions", tid), subPayload);
+      // Hidrata assinatura local imediatamente (shopSubscription filtra por barbershopId)
+      try { const d = DB.get(); upsert(d.subscriptions, { id: tid, barbershopId: tid, ...subPayload }); DB.save(); } catch (_) {}
+
+      await addDoc(collection(FB.db, "tenants", tid, "services"), {
+        tenantId: tid, barbershopId: tid, name: "Corte Masculino", desc: "Corte personalizado.",
+        price: 45, duration: 30, category: "Cabelo", icon: "scissors", active: true,
+      });
+      await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
+        tenantId: tid, barbershopId: tid, name: ownerName || "Barbeiro",
+        role: "Proprietário & Barbeiro", photoUrl: "", photoPath: "", bio: "", phone: phone || "", email,
+        specialties: ["Corte"], commission: 0, productCommission: 0, isOwner: true,
+        start: "09:00", end: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
+        days: [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
+      });
+    } catch (err) {
+      window._fbSigningUp = false;
+      try { await cred.user.delete(); } catch (_) {}
+      throw err;
+    }
     window._fbSigningUp = false;
     await window.fbRefreshSession();
     return { tenantId: tid, slug };
@@ -190,16 +204,23 @@
     if (name) await A.updateProfile(cred.user, { displayName: name });
     const uid = cred.user.uid;
     const { doc, collection, setDoc, addDoc } = F;
-    const cRef = await addDoc(collection(FB.db, "tenants", tenantId, "customers"), {
-      tenantId, barbershopId: tenantId, name, email, phone: phone || "", whatsapp: phone || "",
-      notes: "", createdAt: Date.now(),
-    });
-    await setDoc(doc(FB.db, "users", uid), {
-      name, email, role: "customer", tenantId, customerId: cRef.id, active: true, createdAt: Date.now(),
-    });
-    window._fbSigningUp = false;
-    await window.fbRefreshSession();
-    return { customerId: cRef.id };
+    try {
+      const cRef = await addDoc(collection(FB.db, "tenants", tenantId, "customers"), {
+        tenantId, barbershopId: tenantId, name, email, phone: phone || "", whatsapp: phone || "",
+        notes: "", createdAt: Date.now(),
+      });
+      await setDoc(doc(FB.db, "users", uid), {
+        name, email, role: "customer", tenantId, customerId: cRef.id, active: true, createdAt: Date.now(),
+      });
+      window._fbSigningUp = false;
+      await window.fbRefreshSession();
+      return { customerId: cRef.id };
+    } catch (err) {
+      // Rollback: remove auth user para evitar conta quebrada (auth sem docs Firestore)
+      window._fbSigningUp = false;
+      try { await cred.user.delete(); } catch (_) {}
+      throw err;
+    }
   };
 
   // ---------------- PÁGINA PÚBLICA (leitura anônima por slug) ----------------
@@ -223,7 +244,7 @@
 
   // ---------------- BOOKING PÚBLICO (escrita direta validada por regras) ----------------
   window.fbPublicBooking = async function (p) {
-    const { doc, collection, getDocs, query, where, addDoc, runTransaction } = F;
+    const { doc, collection, getDocs, getDoc, setDoc, query, where, addDoc } = F;
     const tid = p.tenantId;
     // conflito no cliente — query pode falhar (permission-denied) para clientes autenticados
     // cuja regra de leitura requer customerId == myCustomer() (coleção inteira negada)
@@ -242,13 +263,18 @@
     // cliente — usa customerId direto quando cliente está logado, evita doc duplicado
     let customerId = p.customerId || null;
     if (!customerId) {
-      const cq = p.phone
-        ? await getDocs(query(collection(FB.db, "tenants", tid, "customers"), where("phone", "==", p.phone)))
-        : { empty: true };
-      if (!cq.empty) customerId = cq.docs[0].id;
-      else { const cRef = await addDoc(collection(FB.db, "tenants", tid, "customers"),
-        { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone || "", whatsapp: p.phone || "", email: p.email || "", notes: "", createdAt: Date.now() });
-        customerId = cRef.id; }
+      // query pode falhar com permission-denied para usuários não autenticados (regra só permite leitura por ID)
+      try {
+        const cq = p.phone
+          ? await getDocs(query(collection(FB.db, "tenants", tid, "customers"), where("phone", "==", p.phone)))
+          : { empty: true };
+        if (!cq.empty) customerId = cq.docs[0].id;
+      } catch(_) {}
+      if (!customerId) {
+        const cRef = await addDoc(collection(FB.db, "tenants", tid, "customers"),
+          { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone || "", whatsapp: p.phone || "", email: p.email || "", notes: "", createdAt: Date.now() });
+        customerId = cRef.id;
+      }
     }
     const apptPayload = {
       tenantId: tid, barbershopId: tid, customerId, customerName: p.name, phone: p.phone,
@@ -257,15 +283,13 @@
     };
     const appointmentId = publicAppointmentId(tid, p.barberId, p.date, p.time);
     const aRef = doc(FB.db, "tenants", tid, "appointments", appointmentId);
-    await runTransaction(FB.db, async (tx) => {
-      const snap = await tx.get(aRef);
-      if (snap.exists() && snap.data().status !== "cancelado") {
-        const e = new Error("já reservado");
-        e.code = "already-exists";
-        throw e;
-      }
-      tx.set(aRef, apptPayload);
-    });
+    // tx.get falha com permission-denied quando doc não existe (resource null nas rules).
+    // Usamos getDoc+setDoc: as rules distinguem create (slot livre) de update (slot ocupado).
+    const existSnap = await getDoc(aRef).catch(() => null);
+    if (existSnap && existSnap.exists() && existSnap.data().status !== "cancelado") {
+      const e = new Error("já reservado"); e.code = "already-exists"; throw e;
+    }
+    await setDoc(aRef, apptPayload);
     // Hidrata cache local imediatamente — o onSnapshot do cliente é bloqueado por regras
     // (query de coleção inteira negada para role=customer), então injetamos manualmente.
     try {
@@ -293,9 +317,25 @@
   const publicAppointmentId = (tid, barberId, date, time) => `public_${tid}_${barberId}_${date}_${time}`;
   const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };
 
+  // busca direta usada como fallback quando onSnapshot não hidrata o cache
+  window.fbFetchCustomerCache = async function(uid, tid, customerId) {
+    const { doc, getDoc } = F;
+    const db = FB.db;
+    const d = DB.get();
+    if (!d.barbershops.find(x => x.id === tid)) {
+      const ts = await getDoc(doc(db, 'tenants', tid));
+      if (ts.exists()) { if (!d.barbershops) d.barbershops = []; const i = d.barbershops.findIndex(x => x.id === ts.id); if (i > -1) d.barbershops[i] = {id: ts.id, ...ts.data()}; else d.barbershops.push({id: ts.id, ...ts.data()}); }
+    }
+    if (customerId && !d.customers?.find(x => x.id === customerId)) {
+      const cs = await getDoc(doc(db, 'tenants', tid, 'customers', customerId));
+      if (cs.exists()) { if (!d.customers) d.customers = []; const i = d.customers.findIndex(x => x.id === cs.id); if (i > -1) d.customers[i] = {id: cs.id, barbershopId: tid, ...cs.data()}; else d.customers.push({id: cs.id, barbershopId: tid, ...cs.data()}); }
+    }
+    DB.save();
+  };
+
   // ---------------- LISTENERS (hidratação tempo real) ----------------
   async function startListeners(user) {
-    const { collection, onSnapshot, doc } = F;
+    const { collection, onSnapshot, doc, query: qry, where: whr } = F;
     const data = DB.get();
     const bindColl = (path, name, tid) => {
       const un = onSnapshot(collection(FB.db, ...path), (snap) => {
@@ -313,11 +353,29 @@
       bindColl(["users"], "users");
     } else if (user.barbershopId) {
       const tid = user.barbershopId;
+      // Fallback getDoc imediato: garante que a barbearia carrega mesmo se onSnapshot falhar
+      const { getDoc: _getDoc } = F;
+      _getDoc(doc(FB.db, "tenants", tid)).then((d) => {
+        if (d.exists() && !data.barbershops.find((x) => x.id === tid)) {
+          upsert(data.barbershops, { id: d.id, ...d.data() }); DB.save(); render();
+        }
+      }).catch((e) => console.warn("[Groomin] getDoc tenant fallback:", e.code));
       FB.unsubs.push(onSnapshot(doc(FB.db, "tenants", tid), (d) => {
         if (d.exists()) { upsert(data.barbershops, { id: d.id, ...d.data() }); DB.save(); render(); }
-      }, () => {}));
-      const colls = user.role === "customer" ? ["appointments", "services", "barbers"] : TENANT_COLLS;
-      colls.filter((c) => c !== "notifications").forEach((c) => bindColl(["tenants", tid, c], c, tid));
+      }, (e) => { console.warn("[Groomin] onSnapshot tenant falhou:", e.code, e.message); }));
+      if (user.role === "customer") {
+        // Services e barbers: leitura pública, query de coleção OK
+        ["services", "barbers"].forEach((c) => bindColl(["tenants", tid, c], c, tid));
+        // Appointments: query filtrada por customerId — regras negam query de coleção inteira para clientes
+        const apptQ = qry(collection(FB.db, "tenants", tid, "appointments"), whr("customerId", "==", user.customerId));
+        FB.unsubs.push(onSnapshot(apptQ, (snap) => {
+          const arr = snap.docs.map((d) => ({ id: d.id, barbershopId: tid, ...d.data() }));
+          data.appointments = mergeOther(data.appointments, arr, tid);
+          DB.save(); render();
+        }, (e) => { console.warn("[Groomin] onSnapshot customer appointments:", e.code, e.message); }));
+      } else {
+        TENANT_COLLS.filter((c) => c !== "notifications").forEach((c) => bindColl(["tenants", tid, c], c, tid));
+      }
       if (user.role !== "customer") {
         // Notificações: handler especial — mostra toast e ponto no sino para itens novos.
         let _notifLoaded = false;
@@ -345,13 +403,23 @@
         }, () => {}));
       }
       if (user.role === "customer" && user.customerId) {
-        FB.unsubs.push(onSnapshot(doc(FB.db, "tenants", tid, "customers", user.customerId), (d) => {
+        const custRef = doc(FB.db, "tenants", tid, "customers", user.customerId);
+        // Fallback imediato: carrega customer doc sem esperar onSnapshot
+        F.getDoc(custRef).then((d) => {
+          if (d.exists()) {
+            if (!data.customers) data.customers = [];
+            upsert(data.customers, { id: d.id, barbershopId: tid, ...d.data() });
+            DB.save();
+          }
+          render(); // sempre renderiza — renderCustomer trata dado ausente
+        }).catch((e) => { console.warn("[Groomin] getDoc customer fallback:", e.code); render(); });
+        FB.unsubs.push(onSnapshot(custRef, (d) => {
           if (d.exists()) {
             if (!data.customers) data.customers = [];
             upsert(data.customers, { id: d.id, barbershopId: tid, ...d.data() });
             DB.save(); render();
           }
-        }, () => {}));
+        }, (e) => { console.warn("[Groomin] onSnapshot customer falhou:", e.code, e.message); }));
       }
     }
   }
