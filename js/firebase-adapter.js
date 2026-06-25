@@ -98,7 +98,7 @@
     await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
     const tenantPayload = {
       name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
-      description: "Barbearia cadastrada no Groomin.",
+      description: "Barbearia cadastrada no Groomin.", logoUrl: "",
       phone: phone || "", whatsapp: whatsapp || phone || "",
       email, address: address || "", city: "", neighborhood: "", instagram: "",
       open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
@@ -127,7 +127,7 @@
     });
     await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
       tenantId: tid, barbershopId: tid, name: ownerName || "Barbeiro",
-      role: "Proprietário & Barbeiro", bio: "", phone: phone || "", email,
+      role: "Proprietário & Barbeiro", photoUrl: "", bio: "", phone: phone || "", email,
       specialties: ["Corte"], commission: 0, productCommission: 0, isOwner: true,
       start: "09:00", end: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
       days: [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,

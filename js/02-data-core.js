@@ -204,6 +204,16 @@ const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const money=n=>'R$ '+Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const moneyK=n=>{n=Number(n||0);return n>=1000?'R$ '+(n/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+'k':money(n);};
 const initials=n=>(n||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const safeImageUrl=url=>{
+  url=String(url||'').trim();
+  if(!url)return '';
+  return /^(https?:|data:image\/)/i.test(url)?url:'';
+};
+const imageOrInitials=(url,name,cls='')=>{
+  const img=safeImageUrl(url);
+  return img?`<img class="${cls}" src="${escapeHtml(img)}" alt="${escapeHtml(name||'Imagem')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.classList.add('img-failed')"><span class="ini img-fallback">${initials(name)}</span>`:`<span class="ini">${initials(name)}</span>`;
+};
+const brandLogo=(shop,cls='')=>imageOrInitials(shop&&shop.logoUrl,shop&&shop.name,cls);
 const escapeHtml=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DOW_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];

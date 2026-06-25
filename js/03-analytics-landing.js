@@ -499,11 +499,11 @@ function submitOnboarding(){
   let slug=shopSlug||slugify(shopName)||'barbearia';let base=slug,i=1;
   while(DB.get().barbershops.find(s=>s.slug===slug)){slug=base+'-'+(++i);}
   const shopId=DB.uid('shop');
-  DB.insert('barbershops',{id:shopId,slug,name:shopName,ownerName:name,description:'Barbearia cadastrada no Groomin.',address:address||'',city:'',neighborhood:'',phone:phone||'',whatsapp:wa||phone||'',email,instagram:'',open:'09:00',close:'19:00',lunchStart:'12:00',lunchEnd:'13:00',planId:planId||'free',status:'active',rating:0,createdAt:Date.now(),slotInterval:30});
+  DB.insert('barbershops',{id:shopId,slug,name:shopName,ownerName:name,description:'Barbearia cadastrada no Groomin.',logoUrl:'',address:address||'',city:'',neighborhood:'',phone:phone||'',whatsapp:wa||phone||'',email,instagram:'',open:'09:00',close:'19:00',lunchStart:'12:00',lunchEnd:'13:00',planId:planId||'free',status:'active',rating:0,createdAt:Date.now(),slotInterval:30});
   DB.insert('subscriptions',{barbershopId:shopId,planId:planId||'free',status:planId==='free'?'active':'trialing',mrr:plan.price,startedAt:Date.now(),renewsAt:DB.addDays(DB.todayISO(),planId==='free'?0:7)});
   DB.insert('users',{name,email,password:pass,role:'owner',barbershopId:shopId,active:true});
   DB.insert('services',{barbershopId:shopId,name:'Corte Masculino',desc:'Corte personalizado.',price:45,duration:30,category:'Cabelo',icon:'scissors',active:true});
-  DB.insert('barbers',{barbershopId:shopId,name,role:'Proprietário & Barbeiro',bio:'',phone:phone||'',email,specialties:['Corte'],commission:0,productCommission:0,isOwner:true,start:'09:00',end:'19:00',lunchStart:'12:00',lunchEnd:'13:00',days:[1,2,3,4,5,6],vacations:[],active:true,rating:5});
+  DB.insert('barbers',{barbershopId:shopId,name,role:'Proprietário & Barbeiro',photoUrl:'',bio:'',phone:phone||'',email,specialties:['Corte'],commission:0,productCommission:0,isOwner:true,start:'09:00',end:'19:00',lunchStart:'12:00',lunchEnd:'13:00',days:[1,2,3,4,5,6],vacations:[],active:true,rating:5});
   DB.log('Barbearia criada',shopName,shopId);
   Session.login(email,pass);closeModal();toast('Barbearia criada com sucesso! 🎉','ok');
   location.hash='#/dashboard';
@@ -514,10 +514,13 @@ function submitOnboarding(){
    ============================================================ */
 function renderLogin(){
   if(Session.user){location.hash=homeRouteFor(Session.effectiveUser.role);return;}
+  const loginShopId=sessionStorage.getItem('groomin_login_shop');
+  const loginShop=loginShopId?DB.find('barbershops',loginShopId):null;
+  const loginBrand=loginShop?`<span class="logo">${brandLogo(loginShop,'brand-logo-img')}</span><span style="color:#fff">${escapeHtml(loginShop.name)}<small style="color:#cdc7bb">Área da barbearia</small></span>`:`<span class="logo">${icon('scissors')}</span><span style="color:#fff">Groomin<small style="color:#cdc7bb">Plataforma de Gestão</small></span>`;
   $('#root').innerHTML=`
   <div class="auth-screen">
     <div class="auth-side">
-      <div class="brand" style="color:#fff"><span class="logo">${icon('scissors')}</span><span style="color:#fff">Groomin<small style="color:#cdc7bb">Plataforma de Gestão</small></span></div>
+      <div class="brand" style="color:#fff">${loginBrand}</div>
       <div>
         <div class="auth-quote">"O Groomin organizou minha barbearia e aumentou meu faturamento em mais de 30% no primeiro trimestre."</div>
         <div style="margin-top:14px;font-weight:700">Marcelo Dias · Barber Club</div>
@@ -532,8 +535,8 @@ function renderLogin(){
         <button class="btn btn-ghost btn-sm" onclick="Router.go('#/')">${icon('arrowLeft')} Início</button>
         <button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
       </div>
-      <h2>Entrar na plataforma</h2>
-      <p class="sub">Acesse seu painel. Redirecionamos automaticamente conforme o seu perfil.</p>
+      <h2>${loginShop?`Entrar na ${escapeHtml(loginShop.name)}`:'Entrar na plataforma'}</h2>
+      <p class="sub">${loginShop?'Acesse sua conta de cliente ou painel vinculado a esta barbearia.':'Acesse seu painel. Redirecionamos automaticamente conforme o seu perfil.'}</p>
       <div class="field"><label>E-mail</label><div class="input-icon">${icon('mail')}<input class="input" id="lg_email" placeholder="voce@email.com" value="joao@barbeariadojoao.com"></div></div>
       <div class="field"><label>Senha</label><div class="input-icon">${icon('lock')}<input class="input" type="password" id="lg_pass" placeholder="••••••••" value="owner123" onkeydown="if(event.key==='Enter')doLogin()"></div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">

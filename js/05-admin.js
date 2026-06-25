@@ -8,6 +8,9 @@ function closeSidebar(){$('#sidebar')&&$('#sidebar').classList.remove('open');$(
 function mountShell(cfg){
   const u=Session.effectiveUser;const realUser=Session.user;
   const imp=Session.impersonating;
+  const brandShop=cfg.brandShop||null;
+  const brandName=brandShop?brandShop.name:'Groomin';
+  const brandMark=brandShop?brandLogo(brandShop):icon('scissors');
   const banner=imp?`<div class="impersonate-bar">${icon('eye')} Você está acessando como <b>${escapeHtml(imp.name)}</b> (${ROLE_LABEL[imp.role]}) — modo suporte. <button onclick="exitImpersonation()">Voltar ao Super Admin</button></div>`:'';
   const navHTML=cfg.nav.map(n=>{
     if(n.section)return `<div class="side-section">${escapeHtml(n.section)}</div>`;
@@ -25,7 +28,7 @@ function mountShell(cfg){
   return `<div class="backdrop" id="sideBackdrop" onclick="closeSidebar()"></div>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand" onclick="Router.go('#/')"><span class="logo">${icon('scissors')}</span><span>Groomin<small>${escapeHtml(cfg.brandSub||'')}</small></span></div>
+      <div class="brand" onclick="Router.go('#/')"><span class="logo">${brandMark}</span><span>${escapeHtml(brandName)}<small>${escapeHtml(cfg.brandSub||'')}</small></span></div>
       ${cfg.tenantPill||''}
       <nav>${navHTML}</nav>
       <div class="side-foot">

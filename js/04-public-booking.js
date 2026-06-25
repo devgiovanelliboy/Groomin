@@ -58,6 +58,7 @@ function renderPublic(r){
   if(shop.status==='suspended'){$('#root').innerHTML=publicShell(`<div class="container">${emptyState('alert','Página temporariamente indisponível','Esta barbearia não está aceitando agendamentos no momento.')}</div>`);return;}
   document.title=`${shop.name} — Agende online | Groomin`;
   window.currentPublicShopId=shop.id;
+  sessionStorage.setItem('groomin_login_shop',shop.id);
   const services=DB.scope('services',shop.id).filter(s=>s.active);
   const barbers=DB.scope('barbers',shop.id).filter(b=>b.active);
   const reviews=DB.scope('reviews',shop.id);
@@ -66,7 +67,7 @@ function renderPublic(r){
     <div class="container">
       <div class="cover"></div>
       <div class="shop-head">
-        <div class="shop-logo">${initials(shop.name)}</div>
+        <div class="shop-logo">${brandLogo(shop,'shop-logo-img')}</div>
         <div style="flex:1;padding-bottom:6px">
           <h1 style="font-size:clamp(1.6rem,4vw,2.2rem)">${escapeHtml(shop.name)}</h1>
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
@@ -89,7 +90,7 @@ function renderPublic(r){
             ${services.length?services.map(s=>`<div class="svc-card"><div class="svc-ic">${icon(s.icon||'scissors')}</div><span class="tag" style="margin-bottom:8px">${escapeHtml(s.category)}</span><h3>${escapeHtml(s.name)}</h3><p>${escapeHtml(s.desc)}</p><div class="svc-foot"><div><span class="price">${money(s.price)}</span><div class="dur">${icon('clock')} ${s.duration} min</div></div><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}','${s.id}')">Agendar</button></div></div>`).join(''):emptyState('scissors','Sem serviços ainda','Esta barbearia ainda não cadastrou serviços.')}
           </div>
           <div class="panel-head" style="margin-top:34px"><h3 style="font-size:20px">Profissionais</h3></div>
-          <div class="barber-grid">${barbers.map(b=>`<div class="barber-card"><div class="ph"><span class="ini">${initials(b.name)}</span></div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.slice(0,3).map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div></div></div>`).join('')}</div>
+          <div class="barber-grid">${barbers.map(b=>`<div class="barber-card"><div class="ph">${imageOrInitials(b.photoUrl,b.name,'barber-photo')}</div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.slice(0,3).map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div></div></div>`).join('')}</div>
           ${flags.reviews&&reviews.length?`<div class="panel-head" style="margin-top:34px"><h3 style="font-size:20px">Avaliações</h3></div>
           <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${reviews.map(rv=>`<div class="review-card"><div class="stars-static">${'<svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'.repeat(rv.rating)}</div><p style="margin:10px 0;font-size:14.5px">"${escapeHtml(rv.text)}"</p><div style="display:flex;justify-content:space-between"><b style="font-size:13px">${escapeHtml(rv.customerName)}</b><span class="muted" style="font-size:12px">${fmtDateShort(rv.date)}</span></div></div>`).join('')}</div>`:''}
         </div>
@@ -133,6 +134,7 @@ function startBooking(shopId,serviceId,barberId){
     const u=Session.effectiveUser;
     if(!(u&&u.role==='customer')){
       window._pendingBooking={shopId,serviceId:serviceId||null,barberId:barberId||null};
+      sessionStorage.setItem('groomin_login_shop',shopId);
       toast('Entre na sua conta para agendar.','info');
       openPublicCustomerLogin(shopId);return;
     }
@@ -163,7 +165,7 @@ function renderBookingStep(){
     const barbers=DB.scope('barbers',shopId).filter(b=>b.active);
     c.innerHTML=`<h4 style="margin-bottom:14px">Escolha o profissional</h4><div class="select-grid">
       <div class="select-item ${booking.barber==='any'?'sel':''}" onclick="pickBarber('any')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${icon('users')}</div></div><div><div class="t">Qualquer profissional</div><div class="d">Primeiro horário disponível</div></div></div></div>
-      ${barbers.map(b=>`<div class="select-item ${booking.barber===b.id?'sel':''}" onclick="pickBarber('${b.id}')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${initials(b.name)}</div></div><div><div class="t">${escapeHtml(b.name)}</div><div class="d">${escapeHtml(b.role)} · ${b.rating}★</div></div></div></div>`).join('')}</div>
+      ${barbers.map(b=>`<div class="select-item ${booking.barber===b.id?'sel':''}" onclick="pickBarber('${b.id}')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${imageOrInitials(b.photoUrl,b.name,'mini-avatar-img')}</div></div><div><div class="t">${escapeHtml(b.name)}</div><div class="d">${escapeHtml(b.role)} · ${b.rating}★</div></div></div></div>`).join('')}</div>
       <div style="margin-top:18px"><button class="btn btn-ghost" onclick="bookGo(1)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===3){
     const dates=[];for(let i=0;i<14;i++)dates.push(DB.addDays(DB.todayISO(),i));
