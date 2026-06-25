@@ -42,7 +42,7 @@ function renderDashboard(r){
       },8000);
       return;
     }
-    toast('Conta sem barbearia vinculada.','err');location.hash='#/';return;
+    toast('Conta sem barbearia vinculada.','err');location.hash=Session.effectiveUser?'#/login':'#/';return;
   }
   window._dashLoadTimeout&&clearTimeout(window._dashLoadTimeout);window._dashLoadTimeout=null;
   const sub=r.sub||'';
@@ -173,6 +173,11 @@ function apptStatus(id,status){DB.update('appointments',id,{status});const ap=DB
 function apptForm(id){
   const shop=dashShop();const ap=id?DB.find('appointments',id):null;
   const svcs=DB.scope('services',shop.id),barbers=DB.scope('barbers',shop.id);
+  const apSvcName=ap?(DB.find('services',ap.serviceId)||{}).name||'':'';
+  const apBarberName=ap?(DB.find('barbers',ap.barberId)||{}).name||'':'';
+  const waPhone=ap&&ap.phone?ap.phone.replace(/\D/g,''):'';
+  const waMsg=ap&&waPhone?encodeURIComponent(`Olá, ${ap.customerName}! Lembrando do seu agendamento na ${shop.name}: ${apSvcName} com ${apBarberName} em ${fmtDate(ap.date)} às ${ap.time}. Qualquer dúvida é só chamar! 💈`):'';
+  const waBtn=ap&&waPhone?`<a class="btn btn-ghost btn-sm" href="https://wa.me/55${waPhone}?text=${waMsg}" target="_blank" rel="noopener" style="margin-right:auto">${icon('whatsapp')} Lembrete WhatsApp</a>`:'';
   openModal(`<div class="modal-head"><div><h3>${ap?'Editar':'Novo'} agendamento</h3></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
     <div class="field"><label>Cliente *</label><input class="input" id="ap_name" value="${ap?escapeHtml(ap.customerName):''}" placeholder="Nome"><div class="err">Informe o cliente.</div></div>
@@ -187,7 +192,7 @@ function apptForm(id){
     </div>
     <div class="field"><label>Status</label><select class="input" id="ap_status">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${ap?(ap.status===k?'selected':''):(k==='confirmado'?'selected':'')}>${v.label}</option>`).join('')}</select></div>
   </div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveAppt('${id||''}')">Salvar</button></div>`);
+  <div class="modal-foot">${waBtn}<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveAppt('${id||''}')">Salvar</button></div>`);
 }
 function saveAppt(id){
   const shop=dashShop();const name=$('#ap_name').value.trim(),phone=$('#ap_phone').value.trim();
@@ -243,7 +248,7 @@ function dashCRM(shop){
     <td><div class="t-user"><div class="av">${initials(c.name)}</div><div><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.phone)}</small></div></div></td>
     <td><span class="badge ${segB[0]}">${segB[1]}</span></td><td>${c.st.visits}</td><td><b>${money(c.st.totalSpent)}</b></td>
     <td>${c.st.last?fmtDateShort(c.st.last)+' ('+c.st.daysSince+'d)':'—'}</td><td class="muted">${escapeHtml(c.st.favSvc)}</td>
-    <td><div class="row-actions"><button class="ra" title="Detalhes" onclick="customerDetail('${c.id}')">${icon('eye')}</button><button class="ra" title="Editar" onclick="customerForm('${c.id}')">${icon('edit')}</button><button class="ra del" onclick="delCustomer('${c.id}')">${icon('trash')}</button></div></td></tr>`;}).join('')}
+    <td><div class="row-actions">${(c.whatsapp||c.phone)?`<a class="ra wpp" title="WhatsApp" href="https://wa.me/55${(c.whatsapp||c.phone).replace(/\D/g,'')}?text=${encodeURIComponent('Olá, '+c.name+'! Aqui é da '+shop.name+'. Como posso te ajudar?')}" target="_blank" rel="noopener">${icon('whatsapp')}</a>`:''}<button class="ra" title="Detalhes" onclick="customerDetail('${c.id}')">${icon('eye')}</button><button class="ra" title="Editar" onclick="customerForm('${c.id}')">${icon('edit')}</button><button class="ra del" onclick="delCustomer('${c.id}')">${icon('trash')}</button></div></td></tr>`;}).join('')}
   </tbody></table></div>`:emptyState('users','Nenhum cliente neste segmento','Os clientes aparecem aqui conforme o histórico.')}`;
 }
 function customerDetail(id){
@@ -300,7 +305,20 @@ function barberForm(id){
   <div class="modal-body">
     <div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="ba_name" value="${b?escapeHtml(b.name):''}"></div><div class="field"><label>Cargo</label><input class="input" id="ba_role" value="${b?escapeHtml(b.role):'Barbeiro'}"></div></div>
     <div class="form-row"><div class="field"><label>Telefone</label><input class="input" id="ba_phone" value="${b?escapeHtml(b.phone||''):''}"></div><div class="field"><label>E-mail</label><input class="input" id="ba_email" value="${b?escapeHtml(b.email||''):''}"></div></div>
-    <div class="field"><label>Foto do barbeiro</label><input class="input" type="file" id="ba_photo_file" accept="image/*"><small class="muted">${b&&b.photoUrl?'Já existe uma foto salva. Envie outra para substituir.':'Aparece para o cliente na página pública e na escolha do profissional.'}</small></div>
+    <div class="field"><label>Foto do barbeiro</label>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+        <div id="ba_photo_preview" style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;color:var(--primary);flex-shrink:0">
+          ${b&&b.photoUrl?`<img src="${escapeHtml(b.photoUrl)}" alt="${escapeHtml(b.name)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`:`<span>${initials(b?b.name:'')}</span>`}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="btn btn-ghost btn-sm" for="ba_photo_file" style="cursor:pointer;margin:0">${icon('upload')} ${b&&b.photoUrl?'Substituir foto':'Adicionar foto'}</label>
+          ${b&&b.photoUrl?`<button type="button" class="btn btn-ghost btn-sm remove-photo-btn" onclick="clearBarberPhoto()" style="color:var(--danger);margin:0">${icon('trash')} Remover foto</button>`:''}
+          <small class="muted" style="margin:0">PNG, JPG ou WEBP · máx. 5MB</small>
+        </div>
+      </div>
+      <input type="file" id="ba_photo_file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewBarberPhoto(this)">
+      <input type="hidden" id="ba_photo_remove" value="0">
+    </div>
     <div class="field"><label>Biografia</label><textarea class="input" id="ba_bio">${b?escapeHtml(b.bio||''):''}</textarea></div>
     <div class="field"><label>Especialidades (vírgula)</label><input class="input" id="ba_spec" value="${b?escapeHtml(b.specialties.join(', ')):''}" placeholder="Corte, Barba"></div>
     <div class="form-row"><div class="field"><label>Comissão serviços (%)</label><input class="input" type="number" min="0" max="100" id="ba_comm" value="${b?b.commission:50}"></div><div class="field"><label>Comissão produtos (%)</label><input class="input" type="number" min="0" max="100" id="ba_pcomm" value="${b?(b.productCommission??10):10}"></div></div>
@@ -312,9 +330,13 @@ function barberForm(id){
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveBarber('${id||''}')">Salvar</button></div>`);
 }
+function previewCover(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const p=$('#cf_cover_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
+function previewBarberPhoto(input){const file=input.files[0];if(!file)return;const rem=$('#ba_photo_remove');if(rem)rem.value='0';const reader=new FileReader();reader.onload=e=>{const p=$('#ba_photo_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" alt="Preview" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
+function clearBarberPhoto(){const rem=$('#ba_photo_remove');if(rem)rem.value='1';const fi=$('#ba_photo_file');if(fi)fi.value='';const p=$('#ba_photo_preview');if(p){const n=$('#ba_name');p.innerHTML=`<span>${initials(n?n.value:'?')}</span>`;}$$('.remove-photo-btn').forEach(b=>b.style.display='none');}
 async function saveBarber(id){const shop=dashShop();const name=$('#ba_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const days=$$('#ba_days .chip-toggle.on').map(e=>+e.dataset.day);const vs=$('#ba_vs').value,ve=$('#ba_ve').value;const old=id?DB.find('barbers',id):null;const data={name,role:$('#ba_role').value.trim()||'Barbeiro',phone:$('#ba_phone').value.trim(),email:$('#ba_email').value.trim(),bio:$('#ba_bio').value.trim(),specialties:$('#ba_spec').value.split(',').map(s=>s.trim()).filter(Boolean),commission:+$('#ba_comm').value||0,productCommission:+$('#ba_pcomm').value||0,start:$('#ba_start').value,end:$('#ba_end').value,lunchStart:$('#ba_ls').value,lunchEnd:$('#ba_le').value,days,vacations:vs&&ve?[{start:vs,end:ve}]:[],active:$('#ba_active').classList.contains('on')};
-  const file=$('#ba_photo_file')&&$('#ba_photo_file').files[0];
-  if(file&&window.fbUploadTenantImage){try{toast('Enviando foto...','info');const up=await fbUploadTenantImage(shop.id,'barbers',file,old&&old.photoPath);data.photoUrl=up.url;data.photoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar a foto.','err');return;}}
+  const shouldRemove=$('#ba_photo_remove')&&$('#ba_photo_remove').value==='1';
+  if(shouldRemove){if(old&&old.photoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(old.photoPath).catch(()=>{});data.photoUrl='';data.photoPath='';}
+  else{const file=$('#ba_photo_file')&&$('#ba_photo_file').files[0];if(file&&window.fbUploadTenantImage){try{toast('Enviando foto...','info');const up=await fbUploadTenantImage(shop.id,'barbers',file,old&&old.photoPath);data.photoUrl=up.url;data.photoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar a foto.','err');return;}}}
   if(!id&&data.active){const e=shopEntitlements(shop.id);const active=DB.scope('barbers',shop.id).filter(x=>x.active).length;if(active>=e.limitBarbers){toast(`Seu plano (${e.planName}) permite ${e.limitBarbers} profissional(is) ativo(s). Faça upgrade ou cadastre como inativo.`,'err');return;}}
   if(id)DB.update('barbers',id,data);else DB.insert('barbers',{barbershopId:shop.id,rating:5,...data});DB.log(id?'Barbeiro editado':'Barbeiro criado',name,shop.id);closeModal();toast('Barbeiro salvo.','ok');refreshShell();}
 function delBarber(id){confirmAction('Excluir barbeiro?','Esta ação não pode ser desfeita.',()=>{const b=DB.find('barbers',id);DB.remove('barbers',id);if(b&&b.photoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(b.photoPath).catch(()=>{});toast('Barbeiro excluído.','info');refreshShell();});}
@@ -521,21 +543,43 @@ function dashConfig(shop){
   </div>
   <div class="panel"><div class="panel-head"><h3>Informações</h3><a class="btn btn-ghost btn-sm" onclick="Router.go('#/'+'${shop.slug}')">${icon('eye')} Ver página pública</a></div>
     <div class="form-row"><div class="field"><label>Nome</label><input class="input" id="cf_name" value="${escapeHtml(shop.name)}"></div><div class="field"><label>Link público</label><div class="input" style="background:var(--surface-3);color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(shopPublicUrl(shop.slug).replace(/^https?:\/\//,''))}</div></div></div>
-    <div class="field"><label>Logo da barbearia</label><input class="input" type="file" id="cf_logo_file" accept="image/*"><small class="muted">${shop.logoUrl?'Já existe um logo salvo. Envie outro para substituir.':'Esse logo aparece no painel da barbearia, login contextual e link público do cliente.'}</small></div>
+    <div class="field"><label>Logo da barbearia</label>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+        <div style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          ${shop.logoUrl?`<img src="${escapeHtml(shop.logoUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.4rem;font-weight:800;color:var(--primary)">${initials(shop.name)}</span>`}
+        </div>
+        <div><label class="btn btn-ghost btn-sm" for="cf_logo_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.logoUrl?'Substituir logo':'Adicionar logo'}</label>
+        <small class="muted" style="display:block;margin-top:4px">PNG, JPG ou WEBP · máx. 5MB</small></div>
+      </div>
+      <input type="file" id="cf_logo_file" accept="image/jpeg,image/png,image/webp" style="display:none">
+    </div>
+    <div class="field"><label>Foto de capa</label>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+        <div id="cf_cover_preview" style="width:120px;height:68px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#242014,#0d0d0d);flex-shrink:0;display:flex;align-items:center;justify-content:center">
+          ${shop.coverUrl?`<img src="${escapeHtml(shop.coverUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span class="muted" style="font-size:11px">Sem capa</span>`}
+        </div>
+        <div><label class="btn btn-ghost btn-sm" for="cf_cover_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.coverUrl?'Substituir capa':'Adicionar capa'}</label>
+        <small class="muted" style="display:block;margin-top:4px">Aparece no topo da página pública · máx. 5MB</small></div>
+      </div>
+      <input type="file" id="cf_cover_file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewCover(this)">
+    </div>
     <div class="field"><label>Descrição</label><textarea class="input" id="cf_desc">${escapeHtml(shop.description||'')}</textarea></div>
     <div class="field"><label>Endereço</label><input class="input" id="cf_addr" value="${escapeHtml(shop.address||'')}"></div>
     <div class="form-row three"><div class="field"><label>Cidade</label><input class="input" id="cf_city" value="${escapeHtml(shop.city||'')}"></div><div class="field"><label>Bairro</label><input class="input" id="cf_neigh" value="${escapeHtml(shop.neighborhood||'')}"></div><div class="field"><label>Instagram</label><input class="input" id="cf_ig" value="${escapeHtml(shop.instagram||'')}"></div></div>
     <div class="form-row"><div class="field"><label>Telefone</label><input class="input" id="cf_phone" value="${escapeHtml(shop.phone||'')}"></div><div class="field"><label>WhatsApp</label><input class="input" id="cf_wa" value="${escapeHtml(shop.whatsapp||'')}"></div></div>
   </div>
   <div class="panel"><div class="panel-head"><h3>Funcionamento</h3></div>
+    <div class="field"><label>Dias de funcionamento</label><div class="chips" id="cf_days">${DOW.map((d,i)=>`<span class="chip-toggle ${(shop.workDays??[1,2,3,4,5,6]).includes(i)?'on':''}" data-day="${i}" onclick="this.classList.toggle('on')">${d}</span>`).join('')}</div></div>
     <div class="form-row"><div class="field"><label>Abertura</label><input class="input" type="time" id="cf_open" value="${shop.open}"></div><div class="field"><label>Fechamento</label><input class="input" type="time" id="cf_close" value="${shop.close}"></div></div>
     <div class="form-row three"><div class="field"><label>Almoço início</label><input class="input" type="time" id="cf_ls" value="${shop.lunchStart}"></div><div class="field"><label>Almoço fim</label><input class="input" type="time" id="cf_le" value="${shop.lunchEnd}"></div><div class="field"><label>Intervalo de horários</label><select class="input" id="cf_int">${[15,20,30,45,60].map(i=>`<option value="${i}" ${shop.slotInterval===i?'selected':''}>${i} min</option>`).join('')}</select></div></div>
   </div>
   <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="saveConfig()">${icon('check')} Salvar configurações</button></div>`;
 }
-async function saveConfig(){const shop=dashShop();const data={name:$('#cf_name').value.trim(),description:$('#cf_desc').value.trim(),address:$('#cf_addr').value.trim(),city:$('#cf_city').value.trim(),neighborhood:$('#cf_neigh').value.trim(),instagram:$('#cf_ig').value.trim(),phone:$('#cf_phone').value.trim(),whatsapp:$('#cf_wa').value.trim(),open:$('#cf_open').value,close:$('#cf_close').value,lunchStart:$('#cf_ls').value,lunchEnd:$('#cf_le').value,slotInterval:+$('#cf_int').value};
+async function saveConfig(){const shop=dashShop();const workDays=[...$$('#cf_days .chip-toggle.on')].map(el=>+el.dataset.day);const data={name:$('#cf_name').value.trim(),description:$('#cf_desc').value.trim(),address:$('#cf_addr').value.trim(),city:$('#cf_city').value.trim(),neighborhood:$('#cf_neigh').value.trim(),instagram:$('#cf_ig').value.trim(),phone:$('#cf_phone').value.trim(),whatsapp:$('#cf_wa').value.trim(),open:$('#cf_open').value,close:$('#cf_close').value,lunchStart:$('#cf_ls').value,lunchEnd:$('#cf_le').value,slotInterval:+$('#cf_int').value,workDays};
   const file=$('#cf_logo_file')&&$('#cf_logo_file').files[0];
   if(file&&window.fbUploadTenantImage){try{toast('Enviando logo...','info');const up=await fbUploadTenantImage(shop.id,'logos',file,shop.logoPath);data.logoUrl=up.url;data.logoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar o logo.','err');return;}}
+  const coverFile=$('#cf_cover_file')&&$('#cf_cover_file').files[0];
+  if(coverFile&&window.fbUploadTenantImage){try{toast('Enviando capa...','info');const upc=await fbUploadTenantImage(shop.id,'covers',coverFile,shop.coverPath);data.coverUrl=upc.url;data.coverPath=upc.path;}catch(e){toast('Não foi possível enviar a foto de capa.','err');return;}}
   DB.update('barbershops',shop.id,data);DB.log('Configurações atualizadas',shop.name,shop.id);toast('Configurações salvas.','ok');refreshShell();}
 
 /* ---------- Assinatura ---------- */

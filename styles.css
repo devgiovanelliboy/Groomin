@@ -176,6 +176,11 @@ section{padding:60px 0}
 .barber-card h3{font-size:17px}
 .barber-card .role{font-size:13px;color:var(--primary);font-weight:700;margin-bottom:8px}
 .barber-card .spec{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.barber-days{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
+.barber-days .day{font-size:11px;font-weight:600;padding:2px 6px;border-radius:6px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.barber-days .day.on{background:rgba(212,175,55,.18);color:var(--primary);border-color:rgba(212,175,55,.4)}
+.barber-days.compact{margin-top:5px}
+.barber-days.compact .day{font-size:10px;padding:1px 5px}
 
 .cta-band{margin:30px auto;max-width:var(--maxw);border-radius:var(--radius-lg);background:linear-gradient(120deg,rgba(212,175,55,.18),rgba(212,175,55,.04) 60%),var(--surface);border:1px solid var(--line);padding:48px;text-align:center}
 .cta-band h2{font-size:clamp(1.6rem,3.4vw,2.3rem);margin-bottom:12px}
@@ -372,6 +377,7 @@ tbody tr:last-child td{border-bottom:none}
 .ra{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--surface-2);color:var(--muted);transition:.18s;border:1px solid transparent}
 .ra:hover{color:var(--primary);border-color:var(--line)}
 .ra.del:hover{color:var(--danger)}
+.ra.wpp:hover{color:#25D366}
 .ra svg{width:16px;height:16px}
 
 .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
@@ -500,8 +506,10 @@ table.cmp thead th.cmp-feat{border-top:2px solid var(--primary);border-radius:12
 .shop-logo{width:108px;height:108px;border-radius:22px;border:3px solid var(--bg);background:linear-gradient(135deg,var(--brand-2),var(--primary));color:var(--brand-ink);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:40px;flex:none;box-shadow:var(--shadow)}
 .shop-logo img{width:100%;height:100%;object-fit:cover;border-radius:18px}
 .shop-meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;color:var(--muted);font-size:14px}
-.shop-meta span{display:flex;align-items:center;gap:7px}
+.shop-meta span,.shop-meta a.map-link{display:flex;align-items:center;gap:7px}
 .shop-meta svg{width:16px;height:16px;color:var(--primary)}
+.shop-meta a.map-link{color:var(--muted);text-decoration:none;transition:.2s}
+.shop-meta a.map-link:hover{color:var(--primary)}
 .stars-static{color:var(--primary);display:inline-flex;gap:1px}
 .stars-static svg{width:15px;height:15px;fill:currentColor}
 .review-card{padding:18px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface)}
@@ -578,6 +586,18 @@ table.cmp thead th.cmp-feat{border-top:2px solid var(--primary);border-radius:12
   .wstep .lbl{display:none}
   .content{padding:18px}
   .hero{padding:44px 0 36px}
+  /* mobile booking */
+  .overlay{padding:0;align-items:flex-end}
+  .modal,.modal.lg{max-width:100%;border-radius:var(--radius-lg) var(--radius-lg) 0 0;max-height:94vh}
+  .cover{height:180px}
+  .shop-head{margin-top:-44px}
+  .shop-logo{width:80px;height:80px;font-size:28px;border-radius:16px}
+  .select-grid{grid-template-columns:1fr}
+  .slot-grid{grid-template-columns:repeat(4,1fr)}
+  .date-strip{gap:6px}
+  .date-pill{width:62px}
+  .barber-grid{grid-template-columns:1fr 1fr}
+  .barber-card .ph{height:130px}
 }
 @media print{
   body *{visibility:hidden}

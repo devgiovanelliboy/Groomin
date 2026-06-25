@@ -12,7 +12,7 @@
           const nw=reg.installing;if(!nw)return;
           nw.addEventListener('statechange',()=>{
             if(nw.state==='installed'&&navigator.serviceWorker.controller){
-              toast('Nova versão disponível. Recarregue para atualizar.','info');
+              showUpdateBanner();
             }
           });
         });
@@ -56,4 +56,12 @@
     document.body.appendChild(b);
   }
   function removeInstall(){const b=document.getElementById('pwaInstall');if(b)b.remove();}
+  function showUpdateBanner(){
+    if(document.getElementById('pwaUpdate'))return;
+    const b=document.createElement('div');
+    b.id='pwaUpdate';
+    b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:300;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;gap:12px;font-size:.9rem;font-weight:500;box-shadow:0 -2px 12px rgba(0,0,0,.3)';
+    b.innerHTML=`<span>${icon('refresh')} Nova versão do Groomin disponível.</span><button onclick="location.reload()" style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar agora</button>`;
+    document.body.appendChild(b);
+  }
 })();

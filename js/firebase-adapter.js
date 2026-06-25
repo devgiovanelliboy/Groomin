@@ -274,6 +274,20 @@
       upsert(d.appointments, { id: appointmentId, ...apptPayload });
       DB.save();
     } catch (_) {}
+    // Notificação em tempo real para o dono e barbeiro atribuído.
+    try {
+      const barberPart = p.barberName ? ` · ${p.barberName}` : '';
+      const svcPart = p.serviceName ? ` — ${p.serviceName}` : '';
+      await addDoc(collection(FB.db, 'tenants', tid, 'notifications'), {
+        barbershopId: tid,
+        barberId: p.barberId,
+        type: 'confirm',
+        title: 'Novo agendamento',
+        msg: `${p.name}${svcPart}${barberPart} · ${p.date} ${p.time}`,
+        time: Date.now(),
+        read: false,
+      });
+    } catch (_) {}
     return { appointmentId };
   };
   const publicAppointmentId = (tid, barberId, date, time) => `public_${tid}_${barberId}_${date}_${time}`;
@@ -303,7 +317,28 @@
         if (d.exists()) { upsert(data.barbershops, { id: d.id, ...d.data() }); DB.save(); render(); }
       }, () => {}));
       const colls = user.role === "customer" ? ["appointments", "services", "barbers"] : TENANT_COLLS;
-      colls.forEach((c) => bindColl(["tenants", tid, c], c, tid));
+      colls.filter((c) => c !== "notifications").forEach((c) => bindColl(["tenants", tid, c], c, tid));
+      if (user.role !== "customer") {
+        // Notificações: handler especial — mostra toast e ponto no sino para itens novos.
+        let _notifLoaded = false;
+        FB.unsubs.push(onSnapshot(collection(FB.db, "tenants", tid, "notifications"), (snap) => {
+          const arr = snap.docs.map((d) => ({ id: d.id, barbershopId: tid, ...d.data() }));
+          data["notifications"] = mergeOther(data["notifications"], arr, tid);
+          DB.save();
+          if (_notifLoaded) {
+            snap.docChanges().forEach((ch) => {
+              if (ch.type === "added") {
+                const n = ch.doc.data();
+                if (window.toast) toast((n.title || "Notificação") + ": " + (n.msg || ""), "info");
+                const dot = document.getElementById("notifDot");
+                if (dot) dot.style.display = "block";
+              }
+            });
+          }
+          _notifLoaded = true;
+          render();
+        }, () => {}));
+      }
       if (user.role !== "customer") {
         FB.unsubs.push(onSnapshot(doc(FB.db, "subscriptions", tid), (d) => {
           if (d.exists()) { upsert(data.subscriptions, { id: d.id, barbershopId: tid, ...d.data() }); DB.save(); render(); }

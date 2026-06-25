@@ -11,7 +11,7 @@
 
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyCABD-0pmi8ihRSjtv0hXH61HIMzzOv1uE",
-  authDomain: "groomin-952d0.firebaseapp.com",
+  authDomain: "groomin.com.br",
   projectId: "groomin-952d0",
   storageBucket: "groomin-952d0.firebasestorage.app",
   messagingSenderId: "842337348210",

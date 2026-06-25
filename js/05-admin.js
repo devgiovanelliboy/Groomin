@@ -67,7 +67,7 @@ function renderShellNotif(){
   p.innerHTML=`<div class="nh"><b>Notificações</b><button class="btn btn-sm" style="color:var(--primary)" onclick="markNotifRead()">Marcar lidas</button></div>
     ${list.length?list.map(n=>{const[ic,cl]=map[n.type]||['bell','info'];return `<div class="notif-item"><span class="ni" style="background:var(--${cl}-soft);color:var(--${cl})">${icon(ic)}</span><div><b>${escapeHtml(n.title)}</b><p>${escapeHtml(n.msg)}</p><small>${relTime(n.time)} atrás</small></div></div>`;}).join(''):'<div class="empty" style="padding:30px"><p>Sem notificações</p></div>'}`;
 }
-function markNotifRead(){const u=Session.effectiveUser;DB.all('notifications').forEach(n=>{if(!u.barbershopId||n.barbershopId===u.barbershopId)n.read=true;});DB.save();renderShellNotif();}
+function markNotifRead(){const u=Session.effectiveUser;DB.all('notifications').forEach(n=>{if(!u.barbershopId||n.barbershopId===u.barbershopId){n.read=true;if(window.__FB_ENABLED&&window.__dbWrite)__dbWrite('set','notifications',n);}});DB.save();renderShellNotif();}
 document.addEventListener('click',e=>{if(!e.target.closest('#notifPop')&&!e.target.closest('.icon-btn'))$('#notifPop')&&$('#notifPop').classList.remove('open');});
 function refreshShell(){Router.render();}
 window.__afterTheme=()=>{if($('#shellContent')||$('#root').querySelector('.dash-cols'))Router.render();};

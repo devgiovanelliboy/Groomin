@@ -5,7 +5,7 @@
 const DB=(()=>{
   const KEY='groomin_db_v1';
   const uid=p=>(p||'id')+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3);
-  const todayISO=()=>new Date().toISOString().slice(0,10);
+  const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
   const addDays=(d,n)=>{const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
 
   function seed(){

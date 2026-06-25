@@ -2,7 +2,7 @@
    Estratégia: precache do app shell + stale-while-revalidate para o resto
    (inclui CDNs de fonte e Chart.js, cacheados na primeira visita online).
 */
-const VERSION = 'barberos-v4';
+const VERSION = 'barberos-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -49,10 +49,9 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  // Não interceptar esquemas não-http (ex.: chrome-extension)
   if (!url.protocol.startsWith('http')) return;
 
-  // Navegações: a landing e o app têm shells próprios quando estiver offline.
+  // Navegações: network-first com fallback para o shell offline.
   if (req.mode === 'navigate') {
     const shell = url.pathname === '/app' || url.pathname.startsWith('/app/') ? './app/index.html' : './index.html';
     event.respondWith(
@@ -61,7 +60,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-while-revalidate
+  // JS e CSS: network-first — clientes sempre executam a versão mais recente.
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Demais assets (imagens, fontes, CDN): stale-while-revalidate.
   event.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req)

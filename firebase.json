@@ -37,13 +37,19 @@
         ]
       },
       {
-        "glob": "/index.html",
+        "glob": "**/index.html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
+          { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
         ]
       },
       {
-        "glob": "**/*.@(js|css|svg|png|jpg|jpeg|webp|woff2)",
+        "glob": "**/*.@(js|css)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+        ]
+      },
+      {
+        "glob": "**/*.@(png|jpg|jpeg|webp|woff2)",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
         ]

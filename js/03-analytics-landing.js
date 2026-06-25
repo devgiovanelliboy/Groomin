@@ -100,7 +100,7 @@ function featureLock(shopId,sub){
 function goPricing(){
   closeModal();
   const u=Session.effectiveUser;
-  if(u&&(u.role==='owner'||u.role==='manager')){Router.go('#/dashboard/assinatura');return;}
+  if(u&&u.barbershopId){Router.go('#/dashboard/assinatura');return;}
   Router.go('#/');
   setTimeout(()=>{const el=document.getElementById('pricing');if(el)el.scrollIntoView({behavior:'smooth'});},280);
 }
@@ -120,10 +120,17 @@ function showUpgrade(label,plan,enterprise){
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Agora não</button>${upgradeCTA}</div>`);
 }
 function lockedFeaturePage(label,plan,enterprise){
+  const u=Session.effectiveUser;
+  const canManageSub=u&&(u.role==='owner'||u.role==='manager');
+  const cta=enterprise
+    ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com vendas</a>`
+    :canManageSub
+      ?`<button class="btn btn-primary" onclick="Router.go('#/dashboard/assinatura')">${icon('creditCard')} Ver minha assinatura</button>`
+      :`<button class="btn btn-primary" onclick="goPricing()">${icon('rocket')} Conhecer o plano ${escapeHtml(plan)}</button>`;
   return `<div class="empty" style="padding:64px 20px"><div class="ei" style="background:var(--primary-soft);color:var(--primary)">${icon('lock')}</div>
     <h3>${escapeHtml(label)} ${enterprise?'não está incluído no seu contrato':'faz parte do plano '+escapeHtml(plan)}</h3>
     <p style="max-width:460px;margin:0 auto 20px">${enterprise?'Fale com o seu contato comercial para incluir este recurso ao seu plano Enterprise.':'Desbloqueie '+escapeHtml(label.toLowerCase())+' e leve sua gestão para o próximo nível. Você pode fazer upgrade quando quiser, sem fidelidade.'}</p>
-    ${enterprise?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com vendas</a>`:`<button class="btn btn-primary" onclick="goPricing()">${icon('rocket')} Conhecer o plano ${escapeHtml(plan)}</button>`}</div>`;
+    ${cta}</div>`;
 }
 
 /* ============================================================

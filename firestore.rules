@@ -64,7 +64,7 @@ service cloud.firestore {
              && request.resource.data.msg.size() >= 2
              && request.resource.data.time is number
              && request.resource.data.read == false
-             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','type','title','msg','time','read']);
+             && request.resource.data.keys().hasOnly(['tenantId','barbershopId','barberId','type','title','msg','time','read']);
     }
     function validReview(tid) {
       return request.resource.data.barbershopId == tid
