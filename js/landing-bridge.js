@@ -22,9 +22,14 @@
     location.href = appUrl(path);
   };
 
-  // Os CTAs da landing sempre entram no fluxo da aplicação.
-  window.openOnboarding = window.openTrialSignup = function () {
-    location.href = appUrl('#/signup');
+  // Os CTAs da landing: se já logado vai pro dashboard, senão abre signup.
+  window.openOnboarding = window.openTrialSignup = function (planId) {
+    try {
+      const su=JSON.parse(sessionStorage.getItem('groomin_user'));
+      if(su&&su.barbershopId){location.href=appUrl('#/dashboard/assinatura');return;}
+      if(su){location.href=appUrl('#/signup');return;}
+    } catch(e){}
+    location.href=appUrl('#/signup'+(planId?'?plan='+planId:''));
   };
   window.openDemo = function () {
     location.href = appUrl('#/login');

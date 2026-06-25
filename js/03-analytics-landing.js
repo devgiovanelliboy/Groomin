@@ -97,20 +97,30 @@ function featureLock(shopId,sub){
   const e=shopEntitlements(shopId);
   return {label:g.label,plan:e.isEnterprise?'Enterprise':g.plan,enterprise:e.isEnterprise};
 }
+// Fallback para quando a landing é renderizada dentro do app (sem landing-bridge.js)
+if(typeof window.openTrialSignup==='undefined'){
+  window.openOnboarding=window.openTrialSignup=function(){
+    const u=Session&&Session.effectiveUser;
+    if(u&&u.barbershopId){Router.go('#/dashboard/assinatura');return;}
+    Router.go('#/signup');
+  };
+}
 function goPricing(){
   closeModal();
   const u=Session.effectiveUser;
   if(u&&u.barbershopId){Router.go('#/dashboard/assinatura');return;}
+  if(u){Router.go('#/signup');return;}
   Router.go('#/');
   setTimeout(()=>{const el=document.getElementById('pricing');if(el)el.scrollIntoView({behavior:'smooth'});},280);
 }
 function showUpgrade(label,plan,enterprise){
   const ctaEnt=enterprise===true||enterprise==='true';
   const u=Session.effectiveUser;
+  const canSub=u&&(u.role==='owner'||u.role==='manager');
   const upgradeCTA=ctaEnt
     ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener" onclick="closeModal()">${icon('whatsapp')} Falar com vendas</a>`
-    :(u&&(u.role==='owner'||u.role==='manager'))
-      ?`<button class="btn btn-primary" onclick="goPricing()">${icon('rocket')} Ver minha assinatura</button>`
+    :canSub
+      ?`<button class="btn btn-primary" onclick="closeModal();Router.go('#/dashboard/assinatura')">${icon('creditCard')} Ver minha assinatura</button>`
       :`<button class="btn btn-primary" onclick="goPricing()">${icon('rocket')} Conhecer o plano ${escapeHtml(plan)}</button>`;
   openModal(`<div class="modal-head"><div><h3>${icon('lock')} ${escapeHtml(label)}</h3><div class="sub">${ctaEnt?'Recurso não incluído no seu contrato':'Disponível em um plano superior'}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
