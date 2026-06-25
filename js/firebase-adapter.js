@@ -20,7 +20,7 @@
   const SDK = "https://www.gstatic.com/firebasejs/10.12.5/";
   const FB = { app: null, auth: null, db: null, unsubs: [] };
   window.FB = FB;
-  let A, F, ST; // módulos auth, firestore e storage
+  let A, F, ST, AC; // módulos auth, firestore, storage e app check
 
   async function load() {
     const appMod = await import(SDK + "firebase-app.js");
@@ -28,6 +28,15 @@
     F = await import(SDK + "firebase-firestore.js");
     FB.app = appMod.initializeApp(cfg);
     FB.auth = A.getAuth(FB.app);
+    if (window.FIREBASE_APPCHECK_SITE_KEY) {
+      AC = await import(SDK + "firebase-app-check.js");
+      const Provider = AC.ReCaptchaEnterpriseProvider || AC.ReCaptchaV3Provider;
+      AC.initializeAppCheck(FB.app, {
+        provider: new Provider(window.FIREBASE_APPCHECK_SITE_KEY),
+        isTokenAutoRefreshEnabled: true,
+      });
+      FB.appCheck = true;
+    }
     if (cfg.storageBucket) {
       ST = await import(SDK + "firebase-storage.js");
       FB.storage = ST.getStorage(FB.app);

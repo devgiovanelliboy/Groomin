@@ -150,6 +150,7 @@ function lscroll(id){$('#lnav').classList.remove('mobile-open');const el=documen
 
 function renderLanding(){
   const d=DB.get();
+  const demoCta=window.USE_FIREBASE?'':`<button class="btn btn-ghost" onclick="openDemo()">${icon('play')} Ver Demonstração</button>`;
   $('#root').innerHTML=landingTopbar()+`
   <main>
     <section class="hero"><div class="container hero-grid">
@@ -159,7 +160,7 @@ function renderLanding(){
         <p class="lead">Agenda online, CRM, financeiro, estoque, marketing e inteligência artificial em uma única plataforma. Tudo o que você precisa para crescer.</p>
         <div class="hero-cta">
           <button class="btn btn-primary" onclick="openTrialSignup()">${icon('rocket')} Começar Teste Grátis</button>
-          <button class="btn btn-ghost" onclick="openDemo()">${icon('play')} Ver Demonstração</button>
+          ${demoCta}
         </div>
         <div class="hero-stats">
           <div class="s"><b>+1.200</b><span>Barbearias usando</span></div>
@@ -332,7 +333,7 @@ function landingFooter(){return `<footer class="site"><div class="container">
       <p class="muted" style="font-size:14px;max-width:300px">A plataforma completa de gestão para barbearias do Brasil.</p></div>
     <div><h4>Produto</h4><a onclick="lscroll('benefits')">Benefícios</a><a onclick="lscroll('features')">Recursos</a><a onclick="lscroll('pricing')">Planos</a></div>
     <div><h4>Empresa</h4><a onclick="lscroll('faq')">FAQ</a><a onclick="Router.go('#/find-barbershops')">Marketplace</a><a onclick="Router.go('#/login')">Entrar</a></div>
-    <div><h4>Comece agora</h4><a onclick="openOnboarding()">Teste grátis</a><a onclick="openDemo()">Demonstração</a><a>contato@groomin.com.br</a></div>
+    <div><h4>Comece agora</h4><a onclick="openOnboarding()">Teste grátis</a>${window.USE_FIREBASE?'':`<a onclick="openDemo()">Demonstração</a>`}<a>contato@groomin.com.br</a></div>
   </div>
   <div class="foot-bottom"><span>© 2026 Groomin. Todos os direitos reservados.</span><span>Feito com ✂ para barbearias do Brasil</span></div>
 </div></footer>`;}
@@ -537,8 +538,8 @@ function renderLogin(){
       </div>
       <h2>${loginShop?`Entrar na ${escapeHtml(loginShop.name)}`:'Entrar na plataforma'}</h2>
       <p class="sub">${loginShop?'Acesse sua conta de cliente ou painel vinculado a esta barbearia.':'Acesse seu painel. Redirecionamos automaticamente conforme o seu perfil.'}</p>
-      <div class="field"><label>E-mail</label><div class="input-icon">${icon('mail')}<input class="input" id="lg_email" placeholder="voce@email.com" value="joao@barbeariadojoao.com"></div></div>
-      <div class="field"><label>Senha</label><div class="input-icon">${icon('lock')}<input class="input" type="password" id="lg_pass" placeholder="••••••••" value="owner123" onkeydown="if(event.key==='Enter')doLogin()"></div></div>
+      <div class="field"><label>E-mail</label><div class="input-icon">${icon('mail')}<input class="input" id="lg_email" placeholder="voce@email.com" value="${window.USE_FIREBASE?'':'joao@barbeariadojoao.com'}"></div></div>
+      <div class="field"><label>Senha</label><div class="input-icon">${icon('lock')}<input class="input" type="password" id="lg_pass" placeholder="••••••••" value="${window.USE_FIREBASE?'':'owner123'}" onkeydown="if(event.key==='Enter')doLogin()"></div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <label class="checkbox-row" style="font-size:13px"><input type="checkbox" checked> Lembrar de mim</label>
         <a class="muted" style="font-size:13px;cursor:pointer" onclick="toast('Enviamos um link de recuperação para o seu e-mail.','info')">Esqueci a senha</a>
