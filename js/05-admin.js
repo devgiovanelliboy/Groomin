@@ -73,9 +73,23 @@ function refreshShell(){Router.render();}
 window.__afterTheme=()=>{if($('#shellContent')||$('#root').querySelector('.dash-cols'))Router.render();};
 
 /* chart helper */
+let chartLoader=null;
+function ensureChart(){
+  if(window.Chart)return Promise.resolve(window.Chart);
+  if(chartLoader)return chartLoader;
+  chartLoader=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+    s.async=true;
+    s.onload=()=>resolve(window.Chart);
+    s.onerror=reject;
+    document.head.appendChild(s);
+  });
+  return chartLoader;
+}
 function mkChart(id,type,data,opts){
-  if(!window.Chart){setTimeout(()=>mkChart(id,type,data,opts),200);return;}
   const el=$('#'+id);if(!el)return;
+  if(!window.Chart){ensureChart().then(()=>mkChart(id,type,data,opts)).catch(()=>{});return;}
   const grid=cssVar('--line'),tcol=cssVar('--muted'),prim=cssVar('--primary');
   Chart.defaults.font.family="'Plus Jakarta Sans',sans-serif";Chart.defaults.color=tcol;
   charts[id]=new Chart(el,{type,data,options:Object.assign({responsive:true,maintainAspectRatio:false},opts||{})});

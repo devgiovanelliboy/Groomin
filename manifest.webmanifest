@@ -1,7 +1,7 @@
 {
   "name": "Groomin — Gestão para Barbearias",
   "short_name": "Groomin",
-  "description": "Plataforma completa de gestão para barbearias: agenda, CRM, PDV, estoque, financeiro, marketing e IA.",
+  "description": "Crie sua página profissional de agendamento em menos de 5 minutos.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "/app/",
@@ -21,24 +21,36 @@
       "purpose": "any"
     },
     {
+      "src": "./assets/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./assets/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Entrar / Painel",
+      "name": "Entrar / Agenda",
       "short_name": "Entrar",
       "url": "/app/#/login",
-      "description": "Acessar o painel de gestão"
-    },
-    {
-      "name": "PDV / Caixa",
-      "short_name": "PDV",
-      "url": "/app/#/dashboard/pdv",
-      "description": "Abrir o ponto de venda"
+      "description": "Acessar sua página e agenda"
     }
   ]
 }

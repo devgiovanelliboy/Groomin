@@ -1,7 +1,7 @@
 /* ============================================================
    PDV (POS) + CAIXA + COMBOS + COMISSÕES + CONSUMO
    ============================================================ */
-let posCart=[],posPayment='cash',posDiscount=0,posCustomer='',posBarberId='',posTab='servicos';
+let posCart=[],posPayment='cash',posDiscount=0,posCustomer='',posBarberId='',posTab='servicos',salesHistoryPage=1;
 function openSession(shopId){return DB.scope('cashSessions',shopId).find(s=>s.status==='open');}
 function comboPrice(combo){const sub=combo.items.reduce((s,it)=>{const ref=it.type==='service'?DB.find('services',it.refId):DB.find('products',it.refId);return s+(ref?ref.price:0);},0);return Math.max(0,combo.discountType==='percent'?sub*(1-combo.discountValue/100):sub-combo.discountValue);}
 const PAYLABEL={cash:'Dinheiro',pix:'PIX',credit:'Crédito',debit:'Débito'};
@@ -120,9 +120,11 @@ function saveCashMovement(){const shop=dashShop();const cs=openSession(shop.id);
 function salesHistory(){
   const shop=dashShop();const sales=DB.scope('sales',shop.id).slice().sort((a,b)=>b.createdAt-a.createdAt);
   const total=sales.reduce((s,x)=>s+x.total,0);
+  const pg=pageSlice(sales,salesHistoryPage);salesHistoryPage=pg.page;
   openModal(`<div class="modal-head"><div><h3>Histórico de vendas</h3><div class="sub">${sales.length} venda(s) · ${money(total)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
-  <div class="modal-body">${sales.length?`<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Itens</th><th>Pgto</th><th>Total</th></tr></thead><tbody>${sales.slice(0,30).map(s=>`<tr><td>${new Date(s.createdAt).toLocaleString('pt-BR')}</td><td>${s.items.length} item(s)</td><td><span class="badge muted">${PAYLABEL[s.payment]}</span></td><td><b>${money(s.total)}</b></td></tr>`).join('')}</tbody></table></div>`:emptyState('list','Sem vendas','As vendas do PDV aparecem aqui.')}</div>`,'lg');
+  <div class="modal-body">${sales.length?`<div class="table-wrap"><table><thead><tr><th>Quando</th><th>Itens</th><th>Pgto</th><th>Total</th></tr></thead><tbody>${pg.items.map(s=>`<tr><td>${new Date(s.createdAt).toLocaleString('pt-BR')}</td><td>${s.items.length} item(s)</td><td><span class="badge muted">${PAYLABEL[s.payment]}</span></td><td><b>${money(s.total)}</b></td></tr>`).join('')}</tbody></table></div>${pageControls(pg,'setSalesHistoryPage')}`:emptyState('list','Sem vendas','As vendas do PDV aparecem aqui.')}</div>`,'lg');
 }
+function setSalesHistoryPage(p){salesHistoryPage=p;salesHistory();}
 
 /* ---------- Combos & Pacotes ---------- */
 function dashCombos(shop){

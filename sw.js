@@ -1,8 +1,8 @@
-/* BarberOS — Service Worker
+/* Groomin — Service Worker
    Estratégia: precache do app shell + stale-while-revalidate para o resto
    (inclui CDNs de fonte e Chart.js, cacheados na primeira visita online).
 */
-const VERSION = 'barberos-v14';
+const VERSION = 'groomin-mvp-v15';
 const APP_SHELL = [
   './',
   './index.html',
@@ -18,8 +18,6 @@ const APP_SHELL = [
   './js/04-public-booking.js',
   './js/05-admin.js',
   './js/06-dashboard.js',
-  './js/07-marketplace-boot.js',
-  './js/08-pos.js',
   './js/09-pwa.js'
 ];
 
@@ -102,7 +100,7 @@ self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = { body: event.data && event.data.text() }; }
   const n = data.notification || data;
-  const title = n.title || 'BarberOS';
+  const title = n.title || 'Groomin';
   const options = {
     body: n.body || 'Você tem uma nova atualização.',
     icon: './icon.svg',

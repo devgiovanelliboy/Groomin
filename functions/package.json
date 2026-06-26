@@ -1,8 +1,8 @@
 {
-  "name": "barberos-functions",
-  "description": "Cloud Functions do BarberOS (multi-tenant)",
+  "name": "groomin-functions",
+  "description": "Cloud Functions do Groomin (multi-tenant)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {

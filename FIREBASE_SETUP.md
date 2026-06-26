@@ -1,4 +1,4 @@
-# BarberOS — Setup Firebase (projeto `groomin-952d0`)
+# Groomin — Setup Firebase (projeto `groomin-952d0`)
 
 Guia para sair do modo demo (localStorage) e ativar o backend real:
 **Auth + Firestore (tempo real + offline) + Functions + Storage + Hosting**.
@@ -36,16 +36,23 @@ window.FCM_VAPID_KEY = "...";   // VAPID do passo 1
 window.USE_FIREBASE = true;     // <- LIGA o backend real
 ```
 
-## 3. Instalar deps das Functions e fazer deploy
+## 3. Deploy sem Blaze (Hosting, Firestore e Storage)
+```bash
+firebase deploy --only firestore:rules,firestore:indexes,storage,hosting
+```
+
+## 4. Functions: instalar deps e fazer deploy
 ```bash
 cd functions && npm install && cd ..
-firebase deploy --only firestore:rules,firestore:indexes,storage,functions,hosting
+firebase deploy --only functions --force
 ```
-> Ou tudo de uma vez: `firebase deploy`
+> O projeto já tem Functions Gen 2 ativas em Node 22:
+> `syncUserClaims`, `bootstrapTenant`, `createPublicBooking` e `provisionUser`.
 
-## 4. Criar o primeiro Super Admin
-O papel é controlado por **custom claims**, definidas pela Function `syncUserClaims`
-a partir do documento `/users/{uid}`. Para o primeiro super admin:
+## 5. Criar o primeiro Super Admin
+No modo sem Functions, o papel é lido do documento `/users/{uid}` pelas regras e pelo app.
+Depois do deploy das Functions, a Function `syncUserClaims` também espelha esse papel em
+custom claims. Para o primeiro super admin:
 1. Crie o usuário em **Authentication** (ou pelo app).
 2. No **Firestore**, crie `users/{uid}` com:
    ```json
@@ -57,7 +64,7 @@ a partir do documento `/users/{uid}`. Para o primeiro super admin:
 Donos de barbearia se cadastram sozinhos pelo app (**Teste Grátis**) — a Function
 `bootstrapTenant` cria o tenant, o slug e as claims.
 
-## 5. Testar local com emuladores (opcional, recomendado)
+## 6. Testar local com emuladores (opcional, recomendado)
 ```bash
 firebase emulators:start
 ```

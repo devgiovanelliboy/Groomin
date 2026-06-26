@@ -14,16 +14,16 @@ const DB=(()=>{
       {id:'free',name:'Grátis',price:0,interval:'mês',color:'muted',badge:'',tagline:'Para experimentar e validar a plataforma.',
        limit_barbers:1,limit_appts:50,
        features:['1 profissional','Página pública de agendamento','Agenda online','Até 50 agendamentos/mês'],
-       notIncluded:['CRM','Marketing','Automação no WhatsApp','Estoque','Financeiro','Recursos de IA']},
-      {id:'growth',name:'Growth',price:69,interval:'mês',color:'info',badge:'',tagline:'Para profissionalizar e fidelizar clientes.',
+       notIncluded:['Módulos avançados','Automações futuras','Recursos de gestão completos']},
+      {id:'growth',name:'Growth',price:69,interval:'mês',color:'info',badge:'',tagline:'Para publicar sua página e organizar os primeiros agendamentos.',
        limit_barbers:3,limit_appts:99999,
-       features:['Até 3 profissionais','Agendamentos ilimitados','CRM e gestão de clientes','Lembretes por WhatsApp','Histórico do cliente','Relatórios essenciais']},
-      {id:'pro',name:'Pro',price:119,interval:'mês',color:'gold',badge:'Mais popular',tagline:'O kit completo para crescer com controle.',
+       features:['Até 3 profissionais','Agendamentos ilimitados','Página pública personalizada','Link para Instagram e WhatsApp','Horários por profissional','Configuração rápida']},
+      {id:'pro',name:'Pro',price:119,interval:'mês',color:'gold',badge:'Mais popular',tagline:'Para equipes que precisam de uma agenda online mais flexível.',
        limit_barbers:8,limit_appts:99999,
-       features:['Até 8 profissionais','Tudo do Growth','Automação de marketing','Promoções e campanhas','Estoque e PDV','Financeiro e comissões','Segmentação de clientes','Relatórios avançados']},
-      {id:'elite',name:'Elite',price:179,interval:'mês',color:'gold',badge:'Melhor custo',tagline:'Para redes e operações de alta performance.',
+       features:['Até 8 profissionais','Tudo do Growth','Serviços e categorias ilimitados','Página pública com fotos','Bloqueios de agenda','Suporte prioritário']},
+      {id:'elite',name:'Elite',price:179,interval:'mês',color:'gold',badge:'Melhor custo',tagline:'Para operações com mais profissionais e volume de horários.',
        limit_barbers:999,limit_appts:99999,
-       features:['Profissionais ilimitados','Tudo do Pro','Multi-unidades','IA & Business Intelligence','Analytics preditivo','Campanhas de recuperação automáticas','Relatórios executivos','Suporte prioritário']},
+       features:['Profissionais ilimitados','Tudo do Pro','Volume alto de agendamentos','Prioridade em novos recursos','Acompanhamento de implantação','Suporte prioritário']},
       {id:'enterprise',name:'Enterprise',price:0,interval:'mês',color:'gold',badge:'Sob medida',enterprise:true,tagline:'Plano personalizado para sua operação.',
        limit_barbers:999,limit_appts:99999,
        features:['Preços e limites personalizados','Recursos liberados sob demanda','Atendimento dedicado']}
@@ -151,7 +151,8 @@ const DB=(()=>{
       {id:uid('lg'),time:Date.now()-90000000,actorName:'Bruna Recepção',role:'receptionist',action:'Agendamento criado',target:'Pedro Henrique',barbershopId:'shop1'}
     ];
     const settings={
-      featureFlags:{marketplace:false,whatsapp:true,aiInsights:true,onlinePayments:false,reviews:true},
+      featureFlags:{marketplace:false,whatsapp:true,aiInsights:false,onlinePayments:false,reviews:true},
+      productModules:{crm:false,marketing:false,financial:false,inventory:false,ai:false,multiLocation:false,marketplace:false},
       emailTemplates:[
         {id:'et1',name:'Confirmação de Agendamento',subject:'Seu horário está confirmado!',active:true},
         {id:'et2',name:'Lembrete 24h',subject:'Lembrete: seu horário é amanhã',active:true},
@@ -237,8 +238,13 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t);local
 function toggleTheme(){setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');if(window.__afterTheme)window.__afterTheme();}
 setTheme(localStorage.getItem('groomin_theme')||localStorage.getItem('barberos_theme')||'dark');
 
-function openModal(html,size=''){const m=$('#modal');m.className='modal '+size;m.innerHTML=html;$('#overlay').classList.add('open');document.body.classList.add('locked');}
-function closeModal(){$('#overlay').classList.remove('open');document.body.classList.remove('locked');}
+function openModal(html,size=''){
+  const m=$('#modal');m.className='modal '+size;m.innerHTML=html;
+  m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');
+  $('#overlay').classList.add('open');document.body.classList.add('locked');
+  setTimeout(()=>{const f=m.querySelector('[data-autofocus],input,select,textarea,button:not(.close-x),a[href],[tabindex]:not([tabindex="-1"])');if(f)f.focus({preventScroll:true});},0);
+}
+function closeModal(){$('#overlay').classList.remove('open');document.body.classList.remove('locked');const m=$('#modal');m.removeAttribute('role');m.removeAttribute('aria-modal');}
 $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 function confirmAction(title,msg,onYes,danger=true){
@@ -247,7 +253,9 @@ function confirmAction(title,msg,onYes,danger=true){
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirmYes">Confirmar</button></div>`);
   $('#confirmYes').addEventListener('click',()=>{closeModal();onYes();});
 }
-function emptyState(ic,title,sub){return `<div class="empty"><div class="ei">${icon(ic)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(sub)}</p></div>`;}
+function emptyState(ic,title,sub,actionLabel,action){
+  return `<div class="empty"><div class="ei">${icon(ic)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(sub)}</p>${actionLabel&&action?`<button class="btn btn-primary btn-sm" onclick="${action}">${escapeHtml(actionLabel)}</button>`:''}</div>`;
+}
 function statCard(c,ic,lbl,val,delta,dir){return `<div class="stat"><div class="si ${c}">${icon(ic)}</div><div class="lbl">${escapeHtml(lbl)}</div><div class="val">${val}</div>${delta?`<div class="delta ${dir||'up'}">${icon(dir==='down'?'down':'trending')} ${escapeHtml(delta)}</div>`:''}</div>`;}
 
 /* ============================================================
@@ -274,6 +282,47 @@ const PERMS={
 };
 function can(perm){const u=Session.effectiveUser;return !!(u&&PERMS[perm]&&PERMS[perm].includes(u.role));}
 function homeRouteFor(role){return ({super_admin:'#/admin',owner:'#/dashboard',manager:'#/dashboard',receptionist:'#/dashboard',barber:'#/my-schedule',customer:'#/my-appointments'})[role]||'#/';}
+
+/* ============================================================
+   PRODUCT ARCHITECTURE — Simple SaaS MVP
+   Main promise: create a professional booking page in < 5 min.
+   Future modules stay in code, hidden until explicitly enabled.
+   ============================================================ */
+const PRODUCT_MODULES={
+  '':{stage:'mvp',area:'core',label:'Dashboard'},
+  agenda:{stage:'mvp',area:'booking',label:'Agenda'},
+  servicos:{stage:'mvp',area:'booking',label:'Serviços'},
+  barbeiros:{stage:'mvp',area:'booking',label:'Profissionais'},
+  assinatura:{stage:'mvp',area:'account',label:'Assinatura'},
+  config:{stage:'mvp',area:'account',label:'Página pública'},
+  clientes:{stage:'future',area:'crm',label:'CRM'},
+  marketing:{stage:'future',area:'marketing',label:'Marketing'},
+  financeiro:{stage:'future',area:'financial',label:'Financeiro'},
+  comissoes:{stage:'future',area:'financial',label:'Comissões'},
+  pdv:{stage:'future',area:'financial',label:'PDV / Caixa'},
+  estoque:{stage:'future',area:'inventory',label:'Estoque'},
+  combos:{stage:'future',area:'inventory',label:'Combos & Pacotes'},
+  ia:{stage:'future',area:'ai',label:'Insights de IA'},
+  marketplace:{stage:'future',area:'marketplace',label:'Marketplace'},
+  multiLocation:{stage:'future',area:'multiLocation',label:'Multi-unidades'}
+};
+function productModuleEnabled(id){
+  const key=id||'';
+  const mod=PRODUCT_MODULES[key];
+  if(!mod)return true;
+  if(mod.stage==='mvp')return true;
+  const s=(DB.get().settings||{});
+  const flags=s.productModules||s.futureModules||{};
+  return flags[key]===true||flags[mod.area]===true;
+}
+function futureModuleLabel(id){return (PRODUCT_MODULES[id||'']||{}).label||'Este módulo';}
+function futureModulePage(id){
+  const label=futureModuleLabel(id);
+  return `<div class="empty" style="padding:64px 20px"><div class="ei" style="background:var(--primary-soft);color:var(--primary)">${icon('rocket')}</div>
+    <h3>${escapeHtml(label)} ficará para uma próxima fase</h3>
+    <p style="max-width:520px;margin:0 auto">O MVP do Groomin agora é focado em criar uma página profissional de agendamento em menos de 5 minutos. Este módulo foi preservado no código e está apenas oculto.</p>
+  </div>`;
+}
 
 /* ============================================================
    SESSION (with impersonation for Super Admin support)
@@ -328,6 +377,7 @@ const Router={
     if(r.route==='dashboard'&&!can('view_dashboard')){return needAuth('#/dashboard');}
     if(r.route==='my-schedule'&&!(u&&u.role==='barber')){return needAuth('#/my-schedule');}
     if(r.route==='my-appointments'&&!(u&&u.role==='customer')){return needAuth('#/my-appointments');}
+    if(r.route==='marketplace'&&!productModuleEnabled('marketplace')){location.hash='#/';return;}
     const map={landing:'renderLanding',login:'renderLogin',signup:'renderSignup',admin:'renderAdmin',dashboard:'renderDashboard','my-schedule':'renderBarber','my-appointments':'renderCustomer',public:'renderPublic',marketplace:'renderMarketplace'};
     const fn=window[map[r.route]];
     if(typeof fn==='function')fn(r);
@@ -341,3 +391,7 @@ function needAuth(intended){
   else{toast('Você não tem permissão para esta área.','err');location.hash=homeRouteFor(Session.effectiveUser.role);}
 }
 window.addEventListener('hashchange',()=>Router.render());
+function applyThemeIcons(){const t=document.documentElement.getAttribute('data-theme');$$('[data-theme-ic]').forEach(b=>{if(!b.innerHTML.trim())b.innerHTML=icon(t==='dark'?'moon':'sun');});}
+const _coreRender=Router.render.bind(Router);
+Router.render=function(){_coreRender();applyThemeIcons();};
+window.refreshShell=function(){Router.render();};

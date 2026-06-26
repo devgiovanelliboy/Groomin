@@ -51,8 +51,7 @@
   function showInstall(){
     if(document.getElementById('pwaInstall')||window.matchMedia('(display-mode: standalone)').matches)return;
     const b=document.createElement('button');
-    b.id='pwaInstall';b.className='btn btn-primary';
-    b.style.cssText='position:fixed;left:18px;bottom:18px;z-index:250;box-shadow:var(--shadow-lg)';
+    b.id='pwaInstall';b.className='btn btn-primary pwa-install-btn';
     b.innerHTML=icon('download')+' Instalar app';
     b.onclick=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice;}catch(e){}deferred=null;removeInstall();};
     document.body.appendChild(b);

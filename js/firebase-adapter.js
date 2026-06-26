@@ -1,7 +1,7 @@
 /* ============================================================
-   Groomin — Adaptador Firebase (modo TESTE: Auth + Firestore, SEM Functions)
+   Groomin — Adaptador Firebase (Auth + Firestore + Storage + Functions)
    ------------------------------------------------------------
-   - Papel/tenant vêm do documento /users/{uid} (não de claims).
+   - Papel/tenant vêm do documento /users/{uid}; Functions espelham custom claims.
    - Cadastro do dono cria tenant + slug + dados iniciais no cliente.
    - Página pública carrega dados de forma anônima por slug.
    - Tempo real (onSnapshot) hidrata o cache `DB`; UI re-renderiza sozinha.
@@ -18,16 +18,18 @@
   const TENANT_COLLS = ["services", "barbers", "customers", "appointments", "products",
     "combos", "campaigns", "sales", "cashSessions", "stockMoves", "reviews", "blocks", "notifications"];
   const SDK = "https://www.gstatic.com/firebasejs/10.12.5/";
-  const FB = { app: null, auth: null, db: null, unsubs: [] };
+  const FB = { app: null, auth: null, db: null, functions: null, unsubs: [] };
   window.FB = FB;
-  let A, F, ST, AC; // módulos auth, firestore, storage e app check
+  let A, F, ST, AC, FN; // módulos auth, firestore, storage, app check e functions
 
   async function load() {
     const appMod = await import(SDK + "firebase-app.js");
     A = await import(SDK + "firebase-auth.js");
     F = await import(SDK + "firebase-firestore.js");
+    FN = await import(SDK + "firebase-functions.js");
     FB.app = appMod.initializeApp(cfg);
     FB.auth = A.getAuth(FB.app);
+    FB.functions = FN.getFunctions(FB.app, "us-central1");
     if (window.FIREBASE_APPCHECK_SITE_KEY) {
       AC = await import(SDK + "firebase-app-check.js");
       const Provider = AC.ReCaptchaEnterpriseProvider || AC.ReCaptchaV3Provider;
@@ -86,13 +88,48 @@
   async function onAuth(user) {
     stopListeners();
     if (!user) { sessionStorage.removeItem("groomin_user"); render(); return; }
-    const su = await buildSession(user);
+    let su = await buildSession(user);
     if (!su) { render(); return; } // doc ainda não existe (cadastro em andamento)
+    if (su.role === "customer") {
+      try {
+        const pendingProfile = readJson(sessionStorage.getItem("groomin_customer_link_profile"));
+        const pendingShop = (pendingProfile && pendingProfile.tenantId) || sessionStorage.getItem("groomin_login_shop") || "";
+        if (pendingShop) {
+          su = await activateCustomerTenant(user, su, pendingShop, pendingProfile || null);
+          sessionStorage.removeItem("groomin_customer_link_profile");
+          sessionStorage.removeItem("groomin_login_shop");
+        }
+      } catch (e) {
+        console.warn("[Groomin] vínculo de cliente não ativado:", e.code || "", e.message || e);
+        sessionStorage.removeItem("groomin_login_shop");
+        if ((e.code || "") !== "missing-phone") sessionStorage.removeItem("groomin_customer_link_profile");
+        if (window.toast) toast("Entre pela opção Criar conta desta barbearia para vincular seu perfil.", "info");
+      }
+    }
+    await preloadTenantForSession(su);
     await startListeners(su);
     const intended = sessionStorage.getItem("groomin_intended");
     sessionStorage.removeItem("groomin_intended");
     if (window.homeRouteFor) location.hash = (intended && intended.length) ? intended : homeRouteFor(su.role);
     render();
+  }
+  function readJson(v) { try { return v ? JSON.parse(v) : null; } catch (_) { return null; } }
+  async function preloadTenantForSession(su) {
+    const tid = su && su.barbershopId;
+    if (!tid || !F || !FB.db) return;
+    try {
+      const snap = await F.getDoc(F.doc(FB.db, "tenants", tid));
+      if (snap.exists()) {
+        const d = DB.get();
+        if (!d.barbershops) d.barbershops = [];
+        upsert(d.barbershops, { id: snap.id, ...snap.data() });
+        DB.save();
+      } else {
+        console.warn("[Groomin] tenant não encontrado:", tid);
+      }
+    } catch (e) {
+      console.warn("[Groomin] preload tenant falhou:", e.code || "", e.message || e);
+    }
   }
   async function buildSession(user) {
     let snap;
@@ -104,13 +141,14 @@
       return null;
     }
     const d = snap.data();
-    if (!d.tenantId && d.role === "owner") {
+    const tenantId = d.tenantId || d.barbershopId || null;
+    if (!tenantId && d.role === "owner") {
       console.warn("[Groomin] Usuário owner sem tenantId:", user.uid, d);
     }
     const su = {
       id: user.uid, uid: user.uid, name: d.name || user.displayName || (user.email || "").split("@")[0],
       email: user.email, role: d.role || "customer",
-      barbershopId: d.tenantId || null, customerId: d.customerId || null, active: d.active !== false,
+      barbershopId: tenantId, customerId: d.customerId || null, active: d.active !== false,
     };
     console.log("[Groomin] buildSession ok:", su.role, "tid:", su.barbershopId, "cid:", su.customerId);
     sessionStorage.setItem("groomin_user", JSON.stringify(su));
@@ -123,21 +161,31 @@
   };
   window.fbSignIn = (email, password) => A.signInWithEmailAndPassword(FB.auth, email, password);
   window.fbSignOut = () => A.signOut(FB.auth);
-  window.fbSendPasswordReset = (email) => A.sendPasswordResetEmail(FB.auth, email);
+  function authActionUrl(path) {
+    const origin = location.origin && location.origin !== "null"
+      ? location.origin
+      : `https://${cfg.authDomain || "groomin-952d0.web.app"}`;
+    return `${origin}${path || "/app/#/login"}`;
+  }
+  window.fbSendPasswordReset = (email) => A.sendPasswordResetEmail(FB.auth, email, {
+    url: authActionUrl("/app/#/login"),
+    handleCodeInApp: false,
+  });
 
   // ---------------- CADASTRO DO DONO (bootstrap no cliente) ----------------
-  window.fbSignUpOwner = async function ({ shopName, ownerName, email, password, phone, whatsapp, address, slugOverride, planId }) {
+  window.fbSignUpOwner = async function ({ shopName, ownerName, email, password, phone, whatsapp, address, slugOverride, planId, category, instagram, timezone, hours, professionals, services, logoFile, coverFile }) {
     window._fbSigningUp = true;
+    const allowedPlans = ["growth", "pro", "elite"];
+    const pid = allowedPlans.includes(planId) ? planId : "growth";
     const cred = await A.createUserWithEmailAndPassword(FB.auth, email, password);
     if (ownerName) await A.updateProfile(cred.user, { displayName: ownerName });
     const uid = cred.user.uid;
-    const { doc, collection, setDoc, addDoc, getDoc, serverTimestamp } = F;
+    const { doc, collection, setDoc, addDoc, getDoc } = F;
 
     const slugifyStr = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const tRef = doc(collection(FB.db, "tenants"));
     const tid = tRef.id;
-    const pid = planId || "free";
     const plan = (typeof DB !== "undefined" && DB.find) ? DB.find("plans", pid) : null;
     const mrr = plan ? (plan.price || 0) : 0;
 
@@ -147,17 +195,19 @@
 
     try {
       // tenant PRIMEIRO — regra do slug faz get(tenant) para validar ownerUid
+      const h = hours || {};
       const tenantPayload = {
         name: shopName, slug, ownerName: ownerName || "", ownerUid: uid,
         description: "Barbearia cadastrada no Groomin.", logoUrl: "", logoPath: "",
+        category: category || "barbershop",
         phone: phone || "", whatsapp: whatsapp || phone || "",
-        email, address: address || "", city: "", neighborhood: "", instagram: "",
-        open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
+        email, address: address || "", city: "", neighborhood: "", instagram: instagram || "",
+        open: h.open || "09:00", close: h.close || "19:00", lunchStart: h.lunchStart || "12:00", lunchEnd: h.lunchEnd || "13:00",
+        workDays: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6],
+        timezone: timezone || "America/Sao_Paulo",
         slotInterval: 30, status: "active", planId: pid, rating: 0, createdAt: Date.now(),
       };
       await setDoc(tRef, tenantPayload);
-      // Hidrata local DB imediatamente com o plano correto (sem aguardar onSnapshot)
-      try { const d = DB.get(); upsert(d.barbershops, { id: tid, ...tenantPayload }); DB.save(); } catch (_) {}
 
       // slug depois do tenant (regra valida tenant.ownerUid == uid)
       await setDoc(doc(FB.db, "slugs", slug), { tenantId: tid, createdAt: Date.now() });
@@ -165,28 +215,42 @@
       await setDoc(doc(FB.db, "users", uid), {
         name: ownerName || "Dono", email, role: "owner", tenantId: tid, active: true, createdAt: Date.now(),
       });
-      const trialDays = pid === "free" ? 0 : 7;
       const subPayload = {
         tenantId: tid, planId: pid,
-        status: pid === "free" ? "active" : "trialing",
+        status: "active",
         mrr, startedAt: Date.now(),
-        renewsAt: Date.now() + trialDays * 86400000,
+        renewsAt: Date.now() + 30 * 86400000,
       };
       await setDoc(doc(FB.db, "subscriptions", tid), subPayload);
-      // Hidrata assinatura local imediatamente (shopSubscription filtra por barbershopId)
-      try { const d = DB.get(); upsert(d.subscriptions, { id: tid, barbershopId: tid, ...subPayload }); DB.save(); } catch (_) {}
 
-      await addDoc(collection(FB.db, "tenants", tid, "services"), {
-        tenantId: tid, barbershopId: tid, name: "Corte Masculino", desc: "Corte personalizado.",
-        price: 45, duration: 30, category: "Cabelo", icon: "scissors", active: true,
-      });
-      await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
-        tenantId: tid, barbershopId: tid, name: ownerName || "Barbeiro",
-        role: "Proprietário & Barbeiro", photoUrl: "", photoPath: "", bio: "", phone: phone || "", email,
-        specialties: ["Corte"], commission: 0, productCommission: 0, isOwner: true,
-        start: "09:00", end: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
-        days: [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
-      });
+      const mediaPatch = {};
+      if (logoFile && window.fbUploadTenantImage) {
+        const up = await window.fbUploadTenantImage(tid, "logos", logoFile);
+        mediaPatch.logoUrl = up.url; mediaPatch.logoPath = up.path;
+      }
+      if (coverFile && window.fbUploadTenantImage) {
+        const up = await window.fbUploadTenantImage(tid, "covers", coverFile);
+        mediaPatch.coverUrl = up.url; mediaPatch.coverPath = up.path;
+      }
+      if (Object.keys(mediaPatch).length) await setDoc(tRef, mediaPatch, { merge: true });
+
+      const svcList = Array.isArray(services) && services.length ? services : [{ name: "Corte Masculino", price: 45, duration: 30, category: "Serviços" }];
+      for (const s of svcList) {
+        await addDoc(collection(FB.db, "tenants", tid, "services"), {
+          tenantId: tid, barbershopId: tid, name: s.name || "Serviço", desc: s.desc || "",
+          price: Number(s.price || 0), duration: Number(s.duration || 30), category: s.category || "Serviços", icon: s.icon || "scissors", active: true,
+        });
+      }
+      const barberList = Array.isArray(professionals) && professionals.length ? professionals : [{ name: ownerName || "Profissional", role: "Profissional" }];
+      for (const b of barberList) {
+        await addDoc(collection(FB.db, "tenants", tid, "barbers"), {
+          tenantId: tid, barbershopId: tid, name: b.name || ownerName || "Profissional",
+          role: b.role || "Profissional", photoUrl: "", photoPath: "", bio: b.bio || "", phone: b.phone || phone || "", email: b.email || email,
+          specialties: b.specialties || [], commission: 0, productCommission: 0, isOwner: false,
+          start: h.open || "09:00", end: h.close || "19:00", lunchStart: h.lunchStart || "12:00", lunchEnd: h.lunchEnd || "13:00",
+          days: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
+        });
+      }
     } catch (err) {
       window._fbSigningUp = false;
       try { await cred.user.delete(); } catch (_) {}
@@ -198,23 +262,75 @@
   };
 
   // ---------------- CADASTRO DE CLIENTE (página pública) ----------------
-  window.fbSignUpCustomer = async function ({ name, email, password, phone, tenantId }) {
+  async function activateCustomerTenant(user, su, tenantId, profile) {
+    const { doc, collection, setDoc, addDoc, getDoc } = F;
+    const linkRef = doc(FB.db, "users", user.uid, "customerLinks", tenantId);
+    const linkSnap = await getDoc(linkRef);
+    let customerId = linkSnap.exists() ? linkSnap.data().customerId : null;
+    const email = user.email || (profile && profile.email) || su.email || "";
+    if (!customerId) {
+      const phone = (profile && profile.phone) || "";
+      const birthday = (profile && profile.birthday) || "";
+      if (String(phone).replace(/\D/g, "").length < 8) {
+        const e = new Error("Telefone obrigatório para vincular nova barbearia.");
+        e.code = "missing-phone";
+        throw e;
+      }
+      const name = (profile && profile.name) || su.name || (email.split("@")[0]);
+      const cRef = await addDoc(collection(FB.db, "tenants", tenantId, "customers"), {
+        tenantId, barbershopId: tenantId, name, email, phone, whatsapp: phone,
+        birthday, notes: "", createdAt: Date.now(),
+      });
+      customerId = cRef.id;
+      await setDoc(linkRef, {
+        tenantId, customerId, email, name, createdAt: Date.now(), lastUsedAt: Date.now(),
+      });
+    } else {
+      await setDoc(linkRef, { lastUsedAt: Date.now() }, { merge: true });
+    }
+    await setDoc(doc(FB.db, "users", user.uid), {
+      tenantId, customerId, name: (profile && profile.name) || su.name, email, role: "customer", active: true,
+    }, { merge: true });
+    const next = { ...su, barbershopId: tenantId, customerId, email, role: "customer", active: true };
+    sessionStorage.setItem("groomin_user", JSON.stringify(next));
+    return next;
+  }
+  window.fbEnsureCustomerLink = async function (tenantId, profile) {
+    const user = FB.auth.currentUser;
+    if (!user) throw new Error("Faça login para vincular esta barbearia.");
+    const su = await buildSession(user);
+    if (!su || su.role !== "customer") throw new Error("Conta de cliente inválida.");
+    const next = await activateCustomerTenant(user, su, tenantId, profile || null);
+    stopListeners(); await startListeners(next); render();
+    return next;
+  };
+
+  window.fbSignUpCustomer = async function ({ name, email, password, phone, birthday, tenantId, customerId }) {
     window._fbSigningUp = true;
+    email = String(email || "").trim().toLowerCase();
     const cred = await A.createUserWithEmailAndPassword(FB.auth, email, password);
     if (name) await A.updateProfile(cred.user, { displayName: name });
     const uid = cred.user.uid;
     const { doc, collection, setDoc, addDoc } = F;
     try {
-      const cRef = await addDoc(collection(FB.db, "tenants", tenantId, "customers"), {
-        tenantId, barbershopId: tenantId, name, email, phone: phone || "", whatsapp: phone || "",
-        notes: "", createdAt: Date.now(),
-      });
+      if (!customerId) {
+        const cRef = await addDoc(collection(FB.db, "tenants", tenantId, "customers"), {
+          tenantId, barbershopId: tenantId, name, email, phone: phone || "", whatsapp: phone || "",
+          birthday: birthday || "", notes: "", createdAt: Date.now(),
+        });
+        customerId = cRef.id;
+      } else if (birthday) {
+        await setDoc(doc(FB.db, "tenants", tenantId, "customers", customerId), { birthday }, { merge: true });
+      }
       await setDoc(doc(FB.db, "users", uid), {
-        name, email, role: "customer", tenantId, customerId: cRef.id, active: true, createdAt: Date.now(),
+        name, email, role: "customer", tenantId, customerId, active: true, createdAt: Date.now(),
+      });
+      await setDoc(doc(FB.db, "users", uid, "customerLinks", tenantId), {
+        tenantId, customerId, email, name, createdAt: Date.now(), lastUsedAt: Date.now(),
       });
       window._fbSigningUp = false;
       await window.fbRefreshSession();
-      return { customerId: cRef.id };
+      return { customerId };
     } catch (err) {
       // Rollback: remove auth user para evitar conta quebrada (auth sem docs Firestore)
       window._fbSigningUp = false;
@@ -242,10 +358,42 @@
     return true;
   };
 
-  // ---------------- BOOKING PÚBLICO (escrita direta validada por regras) ----------------
+  // ---------------- BOOKING PÚBLICO (callable server-side; fallback compatível) ----------------
   window.fbPublicBooking = async function (p) {
     const { doc, collection, getDocs, getDoc, setDoc, query, where, addDoc } = F;
     const tid = p.tenantId;
+    if (FN && FB.functions) {
+      try {
+        const call = FN.httpsCallable(FB.functions, "createPublicBooking");
+        const res = await call({
+          tenantId: tid, serviceId: p.serviceId, barberId: p.barberId, date: p.date,
+          time: p.time, name: p.name, phone: p.phone, email: p.email || "",
+          birthday: p.birthday || "",
+          customerId: p.customerId || null,
+        });
+        const data = res.data || {};
+        const appointmentId = data.appointmentId;
+        if (appointmentId) {
+          try {
+            const d = DB.get();
+            if (!d.appointments) d.appointments = [];
+            upsert(d.appointments, {
+              id: appointmentId, tenantId: tid, barbershopId: tid,
+              customerId: data.customerId || p.customerId || null,
+              customerName: p.name, phone: p.phone, serviceId: p.serviceId, barberId: p.barberId,
+              date: p.date, time: p.time, duration: p.duration || 30, status: "confirmado",
+              price: p.price || 0, source: "public", createdAt: Date.now(),
+            });
+            DB.save();
+          } catch (_) {}
+        }
+        return { appointmentId };
+      } catch (fnErr) {
+        const code = fnErr.code || "";
+        if (!["functions/unavailable", "unavailable", "internal"].includes(code)) throw fnErr;
+        console.warn("[Groomin] createPublicBooking callable indisponível; usando fallback Firestore:", code, fnErr.message);
+      }
+    }
     // conflito no cliente — query pode falhar (permission-denied) para clientes autenticados
     // cuja regra de leitura requer customerId == myCustomer() (coleção inteira negada)
     try {
@@ -272,8 +420,10 @@
       } catch(_) {}
       if (!customerId) {
         const cRef = await addDoc(collection(FB.db, "tenants", tid, "customers"),
-          { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone || "", whatsapp: p.phone || "", email: p.email || "", notes: "", createdAt: Date.now() });
+          { tenantId: tid, barbershopId: tid, name: p.name, phone: p.phone || "", whatsapp: p.phone || "", email: p.email || "", birthday: p.birthday || "", notes: "", createdAt: Date.now() });
         customerId = cRef.id;
+      } else if (p.birthday) {
+        await setDoc(doc(FB.db, "tenants", tid, "customers", customerId), { birthday: p.birthday }, { merge: true });
       }
     }
     const apptPayload = {
@@ -313,6 +463,12 @@
       });
     } catch (_) {}
     return { appointmentId };
+  };
+  window.fbGenerateBusinessInsights = async function (tenantId, snapshot) {
+    if (!FN || !FB.functions) throw new Error("Functions indisponível.");
+    const call = FN.httpsCallable(FB.functions, "generateBusinessInsights");
+    const res = await call({ tenantId, snapshot });
+    return res.data || {};
   };
   const publicAppointmentId = (tid, barberId, date, time) => `public_${tid}_${barberId}_${date}_${time}`;
   const toMin = (t) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m; };

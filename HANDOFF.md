@@ -1,10 +1,10 @@
-# BarberOS — Handoff / Contexto do Projeto
+# Groomin — Handoff / Contexto do Projeto
 
 > Documento de continuidade. Abra isto primeiro ao retomar (ou em chat novo).
 > Última atualização: 24/06/2026.
 
 ## 1. O que é
-**BarberOS** — plataforma SaaS **multi-tenant** de gestão para barbearias (pt-BR), tema
+**Groomin** — plataforma SaaS **multi-tenant** de gestão para barbearias (pt-BR), tema
 **Preto + Dourado** premium, **PWA** instalável. Cada barbearia é um tenant isolado.
 Público da landing = **donos de barbearia**. Clientes finais entram pelo **link público** da barbearia.
 
@@ -86,24 +86,26 @@ RBAC em `PERMS`/`can()` (02-data-core). Gating de plano: `shopEntitlements()` + 
 2. **Link "limpo"** — hoje é `…/#/slug` (hash). Sem `#` (`…/slug`) ainda não roteia. Dá pra adicionar roteamento por path.
 3. **Super Admin** — não há super admin criado. Como as regras não deixam o cliente criar um doc
    `role: super_admin`, é preciso criar manualmente o doc `/users/{uid}` no Console (ou via Functions/Blaze).
-4. **Cloud Functions** (claims + booking server-side + provisionUser) — escritas, **não deployadas** (precisa plano Blaze).
-5. **Storage** — regras prontas (`storage.rules`), não deployadas; upload de imagens (logo/capa) não ligado ainda.
-6. Paginação/listeners por janela de data (escala), App Check (anti-abuso), splash iOS — recomendados p/ produção (ver QA_REPORT.md).
+4. **Cloud Functions** — deployadas em Gen 2 / Node 22:
+   `syncUserClaims` (southamerica-east1), `bootstrapTenant`, `createPublicBooking`, `provisionUser` (us-central1).
+5. **Storage** — regras deployadas; upload de logo/capa/foto de barbeiro ligado no dashboard.
+6. **Produção/escala** — paginação visual de listas grandes, App Check no client e splash iOS foram ligados; ainda recomendado limitar listeners por janela de data antes de alto volume.
 
 ## 10. Próximos passos (sugestão de ordem)
 1. **Testar o fluxo real** no ar: criar barbearia → pegar slug → abrir o link → agendar.
 2. **Ligar login/cadastro de CLIENTE no Firebase** (signup de cliente dentro do link). ← pedido pendente
 3. **Roteamento por path** pra link limpo sem `#` (ex.: `groomin-952d0.web.app/esquizo-barber`).
 4. (Opcional) Criar o **Super Admin** (doc manual no Firestore) pra ter o painel da plataforma.
-5. (Produção) Subir pro **Blaze**, deployar **Functions** (claims + booking seguro) e **App Check**.
-6. Upload de imagens (deploy do Storage) + splash iOS + paginação.
+5. Testar em produção: cadastro de dono (`bootstrapTenant`), booking público (`createPublicBooking`) e upload real de logo/capa/fotos.
+6. Ativar enforcement de **App Check** no Console quando os fluxos acima estiverem validados.
 
 ## 11. Comandos úteis
 ```bash
 cd d:/Barbearia
 firebase deploy --only hosting                          # publica o front
 firebase deploy --only firestore:rules,firestore:indexes
-# (futuro) firebase deploy --only functions  -> exige Blaze
+firebase deploy --only storage
+firebase deploy --only functions --force
 node --check js/<arquivo>.js                             # checa sintaxe de um módulo
 ```
 - Validação local (jsdom) usada no projeto: testes em

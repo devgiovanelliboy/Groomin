@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ============================================================
-// BarberOS — Cloud Storage Rules (multi-tenant)
+// Groomin — Cloud Storage Rules (multi-tenant)
 // Estrutura: /tenants/{tid}/{tipo}/{arquivo}
 //   logos, capas e fotos de barbeiros/produtos.
 // Leitura pública (imagens da página pública); escrita só do próprio tenant.
@@ -22,9 +22,10 @@ service firebase.storage {
     function validImage()  { return request.resource.size < 5 * 1024 * 1024
                                  && request.resource.contentType.matches('image/.*'); }
 
-    match /tenants/{tid}/{allPaths=**} {
+    match /tenants/{tid}/{kind}/{fileName} {
       allow read:  if true;                          // imagens públicas
-      allow create, update: if (isSuper() || mgrOf(tid)) && validImage();
+      allow create, update: if (kind in ['logos', 'covers', 'barbers', 'products'])
+                            && (isSuper() || mgrOf(tid)) && validImage();
       allow delete: if isSuper() || mgrOf(tid);
     }
 

@@ -3,25 +3,19 @@
    Tenant-isolated by currentShop()
    ============================================================ */
 function dashShop(){const u=Session.effectiveUser;return DB.find('barbershops',u.barbershopId);}
-let agendaDate=null,agendaView='dia',finPeriod='mes',crmSeg='todos';
+let agendaDate=null,agendaView='dia',finPeriod='mes',crmSeg='todos',agendaPage=1,crmPage=1;
+const PAGE_SIZE=30;
+function pageSlice(list,page,size=PAGE_SIZE){const pages=Math.max(1,Math.ceil(list.length/size));const p=Math.min(Math.max(1,page||1),pages);return {items:list.slice((p-1)*size,p*size),page:p,pages,total:list.length};}
+function pageControls(state,setter){if(state.pages<=1)return '';return `<div class="pager"><button class="btn btn-ghost btn-sm" ${state.page<=1?'disabled':''} onclick="${setter}(${state.page-1})">${icon('arrowLeft')} Anterior</button><span class="muted">Página ${state.page} de ${state.pages} · ${state.total} itens</span><button class="btn btn-ghost btn-sm" ${state.page>=state.pages?'disabled':''} onclick="${setter}(${state.page+1})">Próxima ${icon('arrowRight')}</button></div>`;}
+function setAgendaPage(p){agendaPage=p;refreshShell();}
+function setCrmPage(p){crmPage=p;refreshShell();}
 
 function buildDashNav(shop){
   const a=shopAnalytics(shop.id);
-  const nav=[{section:'Operação'},{id:'',label:'Dashboard',icon:'grid'},{id:'agenda',label:'Agenda',icon:'calendar',count:a.today.length}];
-  if(can('use_pos')){const cs=DB.scope('cashSessions',shop.id).find(s=>s.status==='open');nav.push({id:'pdv',label:'PDV / Caixa',icon:'creditCard',count:cs?'•':null});}
-  if(can('manage_customers'))nav.push({id:'clientes',label:'Clientes (CRM)',icon:'users',count:DB.scope('customers',shop.id).length});
-  if(can('manage_services')||can('manage_barbers'))nav.push({section:'Catálogo'});
-  if(can('manage_services'))nav.push({id:'servicos',label:'Serviços',icon:'list'});
-  if(can('manage_services'))nav.push({id:'combos',label:'Combos & Pacotes',icon:'layers'});
-  if(can('manage_barbers'))nav.push({id:'barbeiros',label:'Barbeiros',icon:'scissors'});
-  if(can('manage_inventory')){const low=DB.scope('products',shop.id).filter(p=>p.qty<=p.minStock).length;nav.push({id:'estoque',label:'Estoque',icon:'box',count:low||null});}
-  if(can('manage_marketing')||can('view_financial')||can('view_ai')||can('manage_commissions'))nav.push({section:'Gestão'});
-  if(can('view_financial'))nav.push({id:'financeiro',label:'Financeiro',icon:'dollar'});
-  if(can('manage_commissions'))nav.push({id:'comissoes',label:'Comissões',icon:'award'});
-  if(can('manage_marketing'))nav.push({id:'marketing',label:'Marketing',icon:'megaphone'});
-  if(can('view_ai'))nav.push({id:'ia',label:'Insights de IA',icon:'cpu'});
-  if(can('manage_settings'))nav.push({section:'Conta'},{id:'assinatura',label:'Assinatura',icon:'creditCard'},{id:'config',label:'Configurações',icon:'settings'});
-  nav.forEach(n=>{if(!n.section){const lk=featureLock(shop.id,n.id);if(lk){n.locked=true;n.lockPlan=lk.plan;n.lockLabel=lk.label;n.lockEnt=lk.enterprise;n.count=null;}}});
+  const nav=[{section:'Menu'},{id:'',label:'Dashboard',icon:'grid'},{id:'agenda',label:'Appointments',icon:'calendar',count:a.today.length}];
+  if(can('manage_barbers'))nav.push({id:'barbeiros',label:'Professionals',icon:'scissors'});
+  if(can('manage_services'))nav.push({id:'servicos',label:'Services',icon:'list'});
+  if(can('manage_settings'))nav.push({id:'config',label:'Settings',icon:'settings'},{id:'assinatura',label:'Subscription',icon:'creditCard'});
   return nav;
 }
 function renderDashboard(r){
@@ -46,36 +40,47 @@ function renderDashboard(r){
   }
   window._dashLoadTimeout&&clearTimeout(window._dashLoadTimeout);window._dashLoadTimeout=null;
   const sub=r.sub||'';
-  const titles={'':'Dashboard',agenda:'Agenda',pdv:'PDV / Caixa',clientes:'Clientes (CRM)',barbeiros:'Barbeiros',servicos:'Serviços',combos:'Combos & Pacotes',marketing:'Marketing',estoque:'Estoque',financeiro:'Financeiro',comissoes:'Comissões',ia:'Insights de IA',assinatura:'Assinatura',config:'Configurações'};
+  const activeSubs=['','agenda','barbeiros','servicos','config','assinatura'];
+  const titles={'':'Dashboard',agenda:'Appointments',barbeiros:'Professionals',servicos:'Services',assinatura:'Subscription',config:'Settings'};
   // guard sub-permission
-  const permMap={pdv:'use_pos',clientes:'manage_customers',barbeiros:'manage_barbers',servicos:'manage_services',combos:'manage_services',marketing:'manage_marketing',estoque:'manage_inventory',financeiro:'view_financial',comissoes:'manage_commissions',ia:'view_ai',assinatura:'manage_settings',config:'manage_settings'};
+  const permMap={barbeiros:'manage_barbers',servicos:'manage_services',assinatura:'manage_settings',config:'manage_settings'};
+  if(!activeSubs.includes(sub)||!productModuleEnabled(sub)){
+    const tenantPill=`<div class="tenant-pill" onclick="Router.go('#/'+'${shop.slug}')"><div class="tl">${brandLogo(shop)}</div><div class="info"><b>${escapeHtml(shop.name)}</b><span>${DB.find('plans',shop.planId).name} · /${escapeHtml(shop.slug)}</span></div>${icon('eye')}</div>`;
+    $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Agendamento',nav:buildDashNav(shop),activeId:'',navBase:'#/dashboard/',title:'Inactive module',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content:inactiveDashboardModule(sub),tenantPill});
+    renderShellNotif();
+    return;
+  }
   if(permMap[sub]&&!can(permMap[sub])){toast('Sem permissão para esta área.','err');location.hash='#/dashboard';return;}
-  const renderers={'':dashOverview,agenda:dashAgenda,pdv:dashPDV,clientes:dashCRM,barbeiros:dashBarbers,servicos:dashServices,combos:dashCombos,marketing:dashMarketing,estoque:dashInventory,financeiro:dashFinance,comissoes:dashCommissions,ia:dashAI,assinatura:dashSubscription,config:dashConfig};
+  const renderers={'':dashOverview,agenda:dashAgenda,barbeiros:dashBarbers,servicos:dashServices,assinatura:dashSubscription,config:dashConfig};
   const lock=featureLock(shop.id,sub);
   const content=lock?lockedFeaturePage(lock.label,lock.plan,lock.enterprise):(renderers[sub]||dashOverview)(shop);
   const tenantPill=`<div class="tenant-pill" onclick="Router.go('#/'+'${shop.slug}')"><div class="tl">${brandLogo(shop)}</div><div class="info"><b>${escapeHtml(shop.name)}</b><span>${DB.find('plans',shop.planId).name} · /${escapeHtml(shop.slug)}</span></div>${icon('eye')}</div>`;
-  $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Gestão',nav:buildDashNav(shop),activeId:sub,navBase:'#/dashboard/',title:titles[sub]||'Painel',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content,tenantPill});
-  if(!lock&&sub==='')dashOverviewCharts(shop);
-  if(!lock&&sub==='financeiro')dashFinanceChart(shop);
+  $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Agendamento',nav:buildDashNav(shop),activeId:sub,navBase:'#/dashboard/',title:titles[sub]||'Painel',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content,tenantPill});
   renderShellNotif();
+}
+function inactiveDashboardModule(sub){
+  const label=futureModuleLabel(sub);
+  return `<div class="empty" style="padding:64px 20px"><div class="ei" style="background:var(--surface-2);color:var(--muted)">${icon('lock')}</div>
+    <h3>${escapeHtml(label)} is inactive</h3>
+    <p style="max-width:520px;margin:0 auto">The owner dashboard is focused on booking operations. This module remains preserved in the codebase for a future phase.</p>
+  </div>`;
 }
 
 /* ---------- Booking URL helpers ---------- */
-function shopPublicUrl(slug){return 'https://groomin.com.br/#/'+slug;}
+function shopPublicUrl(slug){return 'https://groomin.com.br/'+slug;}
 function bookingUrlCard(shop){
   const fullUrl=shopPublicUrl(shop.slug);
   const displayUrl=fullUrl.replace(/^https?:\/\//,'');
   const waText=encodeURIComponent(`Agende na ${shop.name}: ${fullUrl}`);
   return `<div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(212,175,55,.07),transparent),var(--surface)">
-    <div class="panel-head"><div><h3>${icon('link')} Link de Agendamento</h3><div class="sub">Compartilhe com seus clientes</div></div>
-      <button class="btn btn-ghost btn-sm" onclick="Router.go('#/${shop.slug}')">${icon('eye')} Ver página</button></div>
+    <div class="panel-head"><div><h3>${icon('link')} Quick Actions</h3><div class="sub">Share your booking page</div></div></div>
     <div class="input" style="background:var(--surface-3);display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:default">
       <b style="color:var(--primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(displayUrl)}</b>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" onclick="groomCopyUrl('${shop.slug}')">${icon('copy')} Copiar link</button>
-      <button class="btn btn-ghost btn-sm" onclick="Router.go('#/${shop.slug}')">${icon('externalLink')} Abrir</button>
-      <a class="btn btn-ghost btn-sm" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>
+      <button class="btn btn-primary btn-sm" onclick="groomCopyUrl('${shop.slug}')">${icon('copy')} Copy Link</button>
+      <button class="btn btn-ghost btn-sm" onclick="Router.go('#/${shop.slug}')">${icon('externalLink')} Open Booking Page</button>
+      <a class="btn btn-ghost btn-sm" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp Share</a>
       <button class="btn btn-ghost btn-sm" onclick="groomQR('${shop.slug}','${escapeHtml(shop.name)}')">${icon('grid')} QR Code</button>
     </div>
   </div>`;
@@ -107,25 +112,23 @@ function groomQR(slug,shopName){
 /* ---------- Overview ---------- */
 function dashOverview(shop){
   const a=shopAnalytics(shop.id);
-  return `${bookingUrlCard(shop)}<div class="stat-grid">
-    ${statCard('c1','calendar','Agendamentos hoje',a.today.length,a.occupancy+'% de ocupação')}
-    ${statCard('c2','dollar','Receita hoje',money(a.revToday),'+8% vs ontem')}
-    ${statCard('c3','trending','Receita do mês',money(a.revMonth),'+18% vs mês anterior')}
-    ${statCard('c4','users','Novos clientes',a.newCustomers,a.returning+' recorrentes')}
+  const todayList=a.today.filter(x=>x.status!=='cancelado').sort((x,y)=>x.time.localeCompare(y.time));
+  const now=new Date(),today=DB.todayISO(),nowMin=now.getHours()*60+now.getMinutes();
+  const upcoming=a.upcoming.filter(x=>x.status!=='cancelado'&&(x.date>today||(x.date===today&&timeToMin(x.time)>=nowMin))).slice(0,8);
+  const apptMini=(ap)=>{const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);return `<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('calendar')}</span><div><b>${escapeHtml(ap.customerName||'Cliente')}</b><br><small>${fmtDateShort(ap.date)} · ${ap.time} · ${s?escapeHtml(s.name):'Serviço'}${b?' · '+escapeHtml(b.name.split(' ')[0]):''}</small></div><span class="badge ${STATUS[ap.status].cls}" style="margin-left:auto">${STATUS[ap.status].label}</span></div>`;};
+  return `${bookingUrlCard(shop)}
+  <div class="stat-grid">
+    ${statCard('c1','calendar',"Today's Appointments",todayList.length,'')}
+    ${statCard('c2','clock','Upcoming Appointments',a.upcoming.length,'')}
+    ${statCard('c3','users','Customers',DB.scope('customers',shop.id).length,'')}
+    ${statCard('c4','dollar',"Today's Revenue",money(a.revToday),'')}
   </div>
   <div class="dash-cols">
-    <div class="panel"><div class="panel-head"><div><h3>Receita — últimos 7 dias</h3><div class="sub">Faturamento diário</div></div><span class="badge ok">${icon('trending')} Em alta</span></div><div class="chart-wrap"><canvas id="dRev"></canvas></div></div>
-    <div class="panel"><div class="panel-head"><h3>Status</h3></div><div class="chart-wrap chart-sm"><canvas id="dStatus"></canvas></div></div>
-  </div>
-  <div class="dash-cols">
-    <div class="panel"><div class="panel-head"><h3>Próximos agendamentos</h3><button class="btn btn-ghost btn-sm" onclick="Router.go('#/dashboard/agenda')">Ver agenda</button></div>
-      ${a.upcoming.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Quando</th><th>Status</th></tr></thead><tbody>${a.upcoming.slice(0,6).map(ap=>{const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name.split(' ')[0]):'—'}</td><td>${fmtDateShort(ap.date)} · ${ap.time}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td></tr>`;}).join('')}</tbody></table></div>`:emptyState('calendar','Sem agendamentos','Novos agendamentos aparecem aqui.')}
+    <div class="panel"><div class="panel-head"><h3>Today's Appointments</h3><button class="btn btn-ghost btn-sm" onclick="Router.go('#/dashboard/agenda')">Appointments</button></div>
+      ${todayList.length?todayList.map(apptMini).join(''):emptyState('calendar','No appointments today',"Share your booking link to fill today's agenda.",'Copy Link',`groomCopyUrl('${shop.slug}')`)}
     </div>
-    <div class="panel"><div class="panel-head"><h3>Destaques</h3></div>
-      ${a.topBarber?`<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('award')}</span><div><b>Barbeiro destaque</b><br><small>${escapeHtml(a.topBarber[0])} · ${a.topBarber[1]} atendimentos</small></div></div>`:''}
-      ${a.topServices[0]?`<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('star')}</span><div><b>Serviço mais procurado</b><br><small>${escapeHtml(a.topServices[0][0])} · ${a.topServices[0][1]}x</small></div></div>`:''}
-      <div class="mini-slot" style="margin:0"><span class="ic">${icon('target')}</span><div><b>Taxa de ocupação</b><br><small>${a.occupancy}% da capacidade de hoje</small></div></div>
-      <div class="progress" style="margin-top:12px"><i style="width:${a.occupancy}%"></i></div>
+    <div class="panel"><div class="panel-head"><h3>Upcoming Appointments</h3></div>
+      ${upcoming.length?upcoming.map(apptMini).join(''):emptyState('clock','No upcoming appointments','Future bookings appear here as clients reserve online.','Open Booking Page',`Router.go('#/${shop.slug}')`)}
     </div>
   </div>`;
 }
@@ -145,7 +148,8 @@ function dashAgenda(shop){
   let body;
   if(agendaView==='lista'){
     const list=DB.scope('appointments',shop.id).slice().sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
-    body=list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Data</th><th>Hora</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${list.map(ap=>apptRow(ap)).join('')}</tbody></table></div>`:emptyState('calendar','Sem agendamentos','Crie o primeiro agendamento.');
+    const pg=pageSlice(list,agendaPage);agendaPage=pg.page;
+    body=list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Data</th><th>Hora</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${pg.items.map(ap=>apptRow(ap)).join('')}</tbody></table></div>${pageControls(pg,'setAgendaPage')}`:emptyState('calendar','Sem agendamentos','Compartilhe sua página pública para receber reservas.','Copiar link',`groomCopyUrl('${shop.slug}')`);
   }else{
     body=`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${barbers.map(b=>{
       const evs=dayAppts.filter(a=>a.barberId===b.id).sort((x,y)=>x.time.localeCompare(y.time));
@@ -153,7 +157,7 @@ function dashAgenda(shop){
       return `<div class="panel" style="margin:0"><div class="panel-head" style="margin-bottom:12px"><div class="t-user"><div class="av">${initials(b.name)}</div><div><b>${escapeHtml(b.name.split(' ')[0])}</b><small>${b.start}–${b.end}</small></div></div></div>
         ${bls.map(x=>`<div class="cal-event blocked"><b>${x.fullDay?'Dia bloqueado':x.start+'–'+x.end}</b><small>${escapeHtml(x.reason||'Bloqueio')}</small></div>`).join('')}
         ${evs.length?evs.map(ap=>{const s=DB.find('services',ap.serviceId);return `<div class="cal-event s-${ap.status}" onclick="apptForm('${ap.id}')"><b>${ap.time} · ${s?escapeHtml(s.name):''}</b><small>${escapeHtml(ap.customerName)}</small></div>`;}).join(''):(bls.length?'':`<p class="muted" style="font-size:13px;text-align:center;padding:14px 0">Livre</p>`)}
-      </div>`;}).join('')||emptyState('users','Sem barbeiros','Cadastre profissionais para ver a agenda.')}</div>`;
+      </div>`;}).join('')||emptyState('users','Sem profissionais','Cadastre profissionais para ver a agenda.','Adicionar profissional','barberForm()')}</div>`;
   }
   return `<div class="page-head"><div><h2>Agenda</h2><p>${dayAppts.filter(a=>a.status!=='cancelado').length} agendamento(s) em ${fmtDate(agendaDate)}</p></div>
     <div class="page-actions">
@@ -161,14 +165,17 @@ function dashAgenda(shop){
       ${canManage?`<button class="btn btn-primary" onclick="apptForm()">${icon('plus')} Novo agendamento</button>`:''}
     </div></div>
   <div class="toolbar">
-    <div class="seg"><button class="${agendaView==='dia'?'on':''}" onclick="agendaView='dia';refreshShell()">Dia</button><button class="${agendaView==='lista'?'on':''}" onclick="agendaView='lista';refreshShell()">Lista</button></div>
+    <div class="seg"><button class="${agendaView==='dia'?'on':''}" onclick="agendaView='dia';refreshShell()">Dia</button><button class="${agendaView==='lista'?'on':''}" onclick="agendaView='lista';agendaPage=1;refreshShell()">Lista</button></div>
     ${agendaView==='dia'?`<div style="display:flex;gap:8px;align-items:center"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,-1);refreshShell()">${icon('arrowLeft')}</button><input class="input" type="date" style="width:auto" value="${agendaDate}" onchange="agendaDate=this.value;refreshShell()"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,1);refreshShell()">${icon('arrowRight')}</button><button class="btn btn-ghost btn-sm" onclick="agendaDate=DB.todayISO();refreshShell()">Hoje</button></div>`:''}
   </div>
   ${body}`;
 }
-function apptRow(ap){const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);const canManage=can('manage_appointments');
-  const consumed=(ap.consumption&&ap.consumption.length)?` <span class="badge gold" title="Consumo registrado">${icon('droplet')}</span>`:'';
-  return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name):'—'}</td><td>${fmtDate(ap.date)}</td><td>${ap.time}</td><td>${money(ap.price)}${consumed}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td><td><div class="row-actions">${canManage&&ap.status!=='cancelado'&&can('manage_inventory')?`<button class="ra" title="Registrar consumo de produtos" onclick="consumeForm('${ap.id}')">${icon('droplet')}</button>`:''}${canManage&&ap.status!=='concluido'&&ap.status!=='cancelado'?`<button class="ra" title="Concluir" onclick="apptStatus('${ap.id}','concluido')">${icon('check')}</button>`:''}${canManage?`<button class="ra" title="Editar" onclick="apptForm('${ap.id}')">${icon('edit')}</button>`:''}${canManage&&ap.status!=='cancelado'?`<button class="ra del" title="Cancelar" onclick="apptStatus('${ap.id}','cancelado')">${icon('x')}</button>`:''}</div></td></tr>`;}
+function apptRow(ap){
+  const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId),canManage=can('manage_appointments');
+  const consumed=(ap.consumption&&ap.consumption.length&&productModuleEnabled('inventory'))?` <span class="badge gold" title="Consumo registrado">${icon('droplet')}</span>`:'';
+  const consumeBtn=canManage&&ap.status!=='cancelado'&&can('manage_inventory')&&productModuleEnabled('inventory')?`<button class="ra" title="Registrar consumo de produtos" onclick="consumeForm('${ap.id}')">${icon('droplet')}</button>`:'';
+  return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name):'—'}</td><td>${fmtDate(ap.date)}</td><td>${ap.time}</td><td>${money(ap.price)}${consumed}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td><td><div class="row-actions">${consumeBtn}${canManage&&ap.status!=='concluido'&&ap.status!=='cancelado'?`<button class="ra" title="Concluir" onclick="apptStatus('${ap.id}','concluido')">${icon('check')}</button>`:''}${canManage?`<button class="ra" title="Editar" onclick="apptForm('${ap.id}')">${icon('edit')}</button>`:''}${canManage&&ap.status!=='cancelado'?`<button class="ra del" title="Cancelar" onclick="apptStatus('${ap.id}','cancelado')">${icon('x')}</button>`:''}</div></td></tr>`;
+}
 function apptStatus(id,status){DB.update('appointments',id,{status});const ap=DB.find('appointments',id);if(status==='cancelado')DB.insert('notifications',{barbershopId:ap.barbershopId,type:'cancel',title:'Cancelamento',msg:`${ap.customerName} — ${fmtDateShort(ap.date)} ${ap.time}`,time:Date.now(),read:false});DB.log(status==='cancelado'?'Agendamento cancelado':'Agendamento concluído',ap.customerName,ap.barbershopId);toast('Status atualizado.',status==='cancelado'?'info':'ok');refreshShell();}
 function apptForm(id){
   const shop=dashShop();const ap=id?DB.find('appointments',id):null;
@@ -236,20 +243,45 @@ function customerStats(shopId,custId){
   let seg='novo';if(totalSpent>=500)seg='vip';else if(appts.length>=5)seg='frequente';if(daysSince>30&&appts.length>0)seg='inativo';
   return {visits:appts.length,totalSpent,last,favSvc:favSvc?favSvc[0]:'—',favBarb:favBarb?favBarb[0]:'—',daysSince,seg};
 }
+function customerMarketingSegments(shop){
+  const customers=DB.scope('customers',shop.id).map(c=>({...c,st:customerStats(shop.id,c.id)}));
+  const now=new Date(),month=now.getMonth(),today=now.toISOString().slice(5,10);
+  const inDays=(c,days)=>{if(!c.birthday)return false;const [_,m,d]=c.birthday.split('-').map(Number);const next=new Date(now.getFullYear(),m-1,d);if(next<new Date(now.getFullYear(),now.getMonth(),now.getDate()))next.setFullYear(now.getFullYear()+1);return Math.ceil((next-now)/86400000)<=days;};
+  return {
+    all:customers,
+    inactive30:customers.filter(c=>c.st.daysSince>30&&c.st.visits>0),
+    inactive60:customers.filter(c=>c.st.daysSince>60&&c.st.visits>0),
+    inactive90:customers.filter(c=>c.st.daysSince>90&&c.st.visits>0),
+    birthdayToday:customers.filter(c=>c.birthday&&c.birthday.slice(5)===today),
+    birthdayWeek:customers.filter(c=>inDays(c,7)),
+    birthdayMonth:customers.filter(c=>c.birthday&&new Date(c.birthday+'T00:00:00').getMonth()===month),
+    vip:customers.filter(c=>c.st.seg==='vip'),
+  };
+}
+function campaignMessage(type,shop,c){
+  const first=(c.name||'').split(' ')[0]||'cliente';
+  const link=`https://groomin.com.br/b/${shop.slug||''}`;
+  if(type==='birthday')return `Oi, ${first}! Feliz aniversário! A equipe da ${shop.name} preparou uma condição especial para você comemorar no estilo. Quer reservar seu horário? ${link}`;
+  if(type==='inactive60')return `Oi, ${first}! Faz um tempo que você não aparece na ${shop.name}. Que tal voltar essa semana para renovar o visual? Posso te ajudar a escolher um horário: ${link}`;
+  if(type==='inactive90')return `Oi, ${first}! Sentimos sua falta na ${shop.name}. Temos horários disponíveis e queremos te receber de volta com um atendimento caprichado. Reservar: ${link}`;
+  return `Oi, ${first}! Sentimos sua falta na ${shop.name}. Esta semana é uma boa para atualizar o corte. Quer agendar? ${link}`;
+}
+function waLink(phone,msg){const n=String(phone||'').replace(/\D/g,'');return n?`https://wa.me/55${n}?text=${encodeURIComponent(msg)}`:'#';}
 function dashCRM(shop){
   const customers=DB.scope('customers',shop.id).map(c=>({...c,st:customerStats(shop.id,c.id)}));
   const counts={todos:customers.length,vip:customers.filter(c=>c.st.seg==='vip').length,frequente:customers.filter(c=>c.st.seg==='frequente').length,inativo:customers.filter(c=>c.st.seg==='inativo').length,novo:customers.filter(c=>c.st.seg==='novo').length};
   const list=crmSeg==='todos'?customers:customers.filter(c=>c.st.seg===crmSeg);
-  const segCard=(k,label,ic,color)=>`<div class="seg-card ${crmSeg===k?'sel':''}" onclick="crmSeg='${k}';refreshShell()"><div class="sc-ic si ${color}">${icon(ic)}</div><b>${counts[k]}</b><span>${label}</span></div>`;
+  const pg=pageSlice(list,crmPage);crmPage=pg.page;
+  const segCard=(k,label,ic,color)=>`<div class="seg-card ${crmSeg===k?'sel':''}" onclick="crmSeg='${k}';crmPage=1;refreshShell()"><div class="sc-ic si ${color}">${icon(ic)}</div><b>${counts[k]}</b><span>${label}</span></div>`;
   return `<div class="page-head"><div><h2>Clientes (CRM)</h2><p>Inteligência de relacionamento e fidelização</p></div><div class="page-actions">${can('manage_marketing')?`<button class="btn btn-ghost" onclick="sendSegmentCampaign('${crmSeg}')">${icon('megaphone')} Campanha p/ segmento</button>`:''}<button class="btn btn-primary" onclick="customerForm()">${icon('plus')} Novo cliente</button></div></div>
   <div class="seg-grid">${segCard('todos','Todos','users','c1')}${segCard('vip','VIP','award','c4')}${segCard('frequente','Frequentes','heart','c2')}${segCard('inativo','Inativos','clock','c5')}${segCard('novo','Novos','sparkle','c3')}</div>
   ${list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Segmento</th><th>Visitas</th><th>Total gasto</th><th>Última visita</th><th>Favorito</th><th></th></tr></thead><tbody>
-  ${list.map(c=>{const segB={vip:['gold','VIP'],frequente:['ok','Frequente'],inativo:['danger','Inativo'],novo:['info','Novo'],todos:['muted','-']}[c.st.seg];return `<tr>
+  ${pg.items.map(c=>{const segB={vip:['gold','VIP'],frequente:['ok','Frequente'],inativo:['danger','Inativo'],novo:['info','Novo'],todos:['muted','-']}[c.st.seg];return `<tr>
     <td><div class="t-user"><div class="av">${initials(c.name)}</div><div><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.phone)}</small></div></div></td>
     <td><span class="badge ${segB[0]}">${segB[1]}</span></td><td>${c.st.visits}</td><td><b>${money(c.st.totalSpent)}</b></td>
     <td>${c.st.last?fmtDateShort(c.st.last)+' ('+c.st.daysSince+'d)':'—'}</td><td class="muted">${escapeHtml(c.st.favSvc)}</td>
     <td><div class="row-actions">${(c.whatsapp||c.phone)?`<a class="ra wpp" title="WhatsApp" href="https://wa.me/55${(c.whatsapp||c.phone).replace(/\D/g,'')}?text=${encodeURIComponent('Olá, '+c.name+'! Aqui é da '+shop.name+'. Como posso te ajudar?')}" target="_blank" rel="noopener">${icon('whatsapp')}</a>`:''}<button class="ra" title="Detalhes" onclick="customerDetail('${c.id}')">${icon('eye')}</button><button class="ra" title="Editar" onclick="customerForm('${c.id}')">${icon('edit')}</button><button class="ra del" onclick="delCustomer('${c.id}')">${icon('trash')}</button></div></td></tr>`;}).join('')}
-  </tbody></table></div>`:emptyState('users','Nenhum cliente neste segmento','Os clientes aparecem aqui conforme o histórico.')}`;
+  </tbody></table></div>${pageControls(pg,'setCrmPage')}`:emptyState('users','Nenhum cliente neste segmento','Os clientes aparecem aqui conforme o histórico.')}`;
 }
 function customerDetail(id){
   const shop=dashShop();const c=DB.find('customers',id);const st=customerStats(shop.id,id);
@@ -287,7 +319,7 @@ function dashBarbers(shop){
   const active=list.filter(b=>b.active).length;
   const e=shopEntitlements(shop.id);const lim=e.limitBarbers>=999?'∞':e.limitBarbers;
   return `<div class="page-head"><div><h2>Barbeiros</h2><p>${active}/${lim} ativo(s) · plano ${escapeHtml(e.planName)}${active>=e.limitBarbers&&e.limitBarbers<999?' · <span style="color:var(--warn)">limite atingido</span>':''}</p></div><div class="page-actions"><button class="btn btn-primary" onclick="barberForm()">${icon('plus')} Novo barbeiro</button></div></div>
-  <div class="barber-grid">${list.map(b=>{const st=DB.scope('appointments',shop.id).filter(a=>a.barberId===b.id&&a.status==='concluido');const rev=st.reduce((s,a)=>s+a.price,0);return `<div class="barber-card" style="${b.active?'':'opacity:.66'}"><div class="ph">${imageOrInitials(b.photoUrl,b.name,'barber-photo')}<span class="badge ${b.active?'ok':'muted'}" style="position:absolute;top:12px;right:12px">${b.active?'Ativo':'Inativo'}</span>${b.isOwner?`<span class="badge gold" style="position:absolute;top:12px;left:12px">${icon('award')} Dono</span>`:''}</div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div><div class="summary-line" style="margin-top:10px"><span class="muted">Comissão serv./prod.</span><b>${b.commission||0}% / ${b.productCommission??10}%</b></div><div class="summary-line"><span class="muted">Faturou</span><b>${money(rev)}</b></div><div class="summary-line"><span class="muted">Expediente</span><b>${b.start}–${b.end}</b></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" style="flex:1" onclick="barberForm('${b.id}')">${icon('edit')} Editar</button><button class="btn btn-sm ${b.active?'btn-ghost':'btn-primary'}" onclick="toggleBarberActive('${b.id}')">${b.active?'Inativar':'Ativar'}</button>${b.isOwner?'':`<button class="ra del" title="Excluir" onclick="delBarber('${b.id}')">${icon('trash')}</button>`}</div></div></div>`;}).join('')||emptyState('scissors','Sem barbeiros','Cadastre o primeiro profissional.')}</div>`;
+  <div class="barber-grid">${list.map(b=>{const st=DB.scope('appointments',shop.id).filter(a=>a.barberId===b.id&&a.status==='concluido');const rev=st.reduce((s,a)=>s+a.price,0);return `<div class="barber-card" style="${b.active?'':'opacity:.66'}"><div class="ph">${imageOrInitials(b.photoUrl,b.name,'barber-photo')}<span class="badge ${b.active?'ok':'muted'}" style="position:absolute;top:12px;right:12px">${b.active?'Ativo':'Inativo'}</span>${b.isOwner?`<span class="badge gold" style="position:absolute;top:12px;left:12px">${icon('award')} Dono</span>`:''}</div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div><div class="summary-line" style="margin-top:10px"><span class="muted">Comissão serv./prod.</span><b>${b.commission||0}% / ${b.productCommission??10}%</b></div><div class="summary-line"><span class="muted">Faturou</span><b>${money(rev)}</b></div><div class="summary-line"><span class="muted">Expediente</span><b>${b.start}–${b.end}</b></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" style="flex:1" onclick="barberForm('${b.id}')">${icon('edit')} Editar</button><button class="btn btn-sm ${b.active?'btn-ghost':'btn-primary'}" onclick="toggleBarberActive('${b.id}')">${b.active?'Inativar':'Ativar'}</button>${b.isOwner?'':`<button class="ra del" title="Excluir" onclick="delBarber('${b.id}')">${icon('trash')}</button>`}</div></div></div>`;}).join('')||emptyState('scissors','Sem profissionais','Cadastre o primeiro profissional para liberar horários online.','Adicionar profissional','barberForm()')}</div>`;
 }
 function toggleBarberActive(id){
   const shop=dashShop();const b=DB.find('barbers',id);
@@ -330,7 +362,10 @@ function barberForm(id){
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveBarber('${id||''}')">Salvar</button></div>`);
 }
-function previewCover(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{const p=$('#cf_cover_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
+function previewLogo(input){const file=input.files[0];if(!file)return;const rem=$('#cf_logo_remove');if(rem)rem.value='0';const reader=new FileReader();reader.onload=e=>{const p=$('#cf_logo_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
+function previewCover(input){const file=input.files[0];if(!file)return;const rem=$('#cf_cover_remove');if(rem)rem.value='0';const reader=new FileReader();reader.onload=e=>{const p=$('#cf_cover_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
+function clearShopLogo(){const rem=$('#cf_logo_remove');if(rem)rem.value='1';const fi=$('#cf_logo_file');if(fi)fi.value='';const p=$('#cf_logo_preview');if(p){const n=$('#cf_name');p.innerHTML=`<span style="font-size:1.4rem;font-weight:800;color:var(--primary)">${initials(n?n.value:'?')}</span>`;}$$('.remove-logo-btn').forEach(b=>b.style.display='none');}
+function clearShopCover(){const rem=$('#cf_cover_remove');if(rem)rem.value='1';const fi=$('#cf_cover_file');if(fi)fi.value='';const p=$('#cf_cover_preview');if(p)p.innerHTML='<span class="muted" style="font-size:11px">Sem capa</span>';$$('.remove-cover-btn').forEach(b=>b.style.display='none');}
 function previewBarberPhoto(input){const file=input.files[0];if(!file)return;const rem=$('#ba_photo_remove');if(rem)rem.value='0';const reader=new FileReader();reader.onload=e=>{const p=$('#ba_photo_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" alt="Preview" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
 function clearBarberPhoto(){const rem=$('#ba_photo_remove');if(rem)rem.value='1';const fi=$('#ba_photo_file');if(fi)fi.value='';const p=$('#ba_photo_preview');if(p){const n=$('#ba_name');p.innerHTML=`<span>${initials(n?n.value:'?')}</span>`;}$$('.remove-photo-btn').forEach(b=>b.style.display='none');}
 async function saveBarber(id){const shop=dashShop();const name=$('#ba_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const days=$$('#ba_days .chip-toggle.on').map(e=>+e.dataset.day);const vs=$('#ba_vs').value,ve=$('#ba_ve').value;const old=id?DB.find('barbers',id):null;const data={name,role:$('#ba_role').value.trim()||'Barbeiro',phone:$('#ba_phone').value.trim(),email:$('#ba_email').value.trim(),bio:$('#ba_bio').value.trim(),specialties:$('#ba_spec').value.split(',').map(s=>s.trim()).filter(Boolean),commission:+$('#ba_comm').value||0,productCommission:+$('#ba_pcomm').value||0,start:$('#ba_start').value,end:$('#ba_end').value,lunchStart:$('#ba_ls').value,lunchEnd:$('#ba_le').value,days,vacations:vs&&ve?[{start:vs,end:ve}]:[],active:$('#ba_active').classList.contains('on')};
@@ -346,7 +381,7 @@ function dashServices(shop){
   const list=DB.scope('services',shop.id);
   return `<div class="page-head"><div><h2>Serviços</h2><p>${list.length} serviço(s)</p></div><div class="page-actions"><button class="btn btn-primary" onclick="serviceForm()">${icon('plus')} Novo serviço</button></div></div>
   <div class="table-wrap"><table><thead><tr><th>Serviço</th><th>Categoria</th><th>Duração</th><th>Preço</th><th>Status</th><th></th></tr></thead><tbody>
-  ${list.map(s=>`<tr><td><div class="t-user"><div class="av">${icon(s.icon||'scissors')}</div><div><b>${escapeHtml(s.name)}</b><small>${escapeHtml((s.desc||'').slice(0,38))}</small></div></div></td><td><span class="tag">${escapeHtml(s.category)}</span></td><td>${s.duration} min</td><td><b>${money(s.price)}</b></td><td><span class="badge ${s.active?'ok':'muted'}">${s.active?'Ativo':'Inativo'}</span></td><td><div class="row-actions"><button class="ra" onclick="serviceForm('${s.id}')">${icon('edit')}</button><button class="ra del" onclick="delService('${s.id}')">${icon('trash')}</button></div></td></tr>`).join('')||`<tr><td colspan="6">${emptyState('list','Sem serviços','Cadastre o primeiro serviço.')}</td></tr>`}
+  ${list.map(s=>`<tr><td><div class="t-user"><div class="av">${icon(s.icon||'scissors')}</div><div><b>${escapeHtml(s.name)}</b><small>${escapeHtml((s.desc||'').slice(0,38))}</small></div></div></td><td><span class="tag">${escapeHtml(s.category)}</span></td><td>${s.duration} min</td><td><b>${money(s.price)}</b></td><td><span class="badge ${s.active?'ok':'muted'}">${s.active?'Ativo':'Inativo'}</span></td><td><div class="row-actions"><button class="ra" onclick="serviceForm('${s.id}')">${icon('edit')}</button><button class="ra del" onclick="delService('${s.id}')">${icon('trash')}</button></div></td></tr>`).join('')||`<tr><td colspan="6">${emptyState('list','Sem serviços','Cadastre o primeiro serviço para seus clientes agendarem online.','Adicionar serviço','serviceForm()')}</td></tr>`}
   </tbody></table></div>`;
 }
 function serviceForm(id){
@@ -367,10 +402,26 @@ function delService(id){confirmAction('Excluir serviço?','Esta ação não pode
 /* ---------- Marketing ---------- */
 function dashMarketing(shop){
   const list=DB.scope('campaigns',shop.id);
+  const seg=customerMarketingSegments(shop);
+  const autoCard=(key,title,desc,ic,items,type)=>`<div class="card" style="padding:16px">
+    <div class="mini-slot" style="margin:0 0 10px"><span class="ic">${icon(ic)}</span><div><b>${escapeHtml(title)}</b><br><small>${escapeHtml(desc)}</small></div><span class="badge ${items.length?'gold':'muted'}" style="margin-left:auto">${items.length}</span></div>
+    ${items.slice(0,4).map(c=>`<div class="summary-line"><span><b>${escapeHtml(c.name)}</b><br><small class="muted">${c.st&&c.st.last?'última visita '+fmtDateShort(c.st.last):c.birthday?fmtDate(c.birthday):'sem histórico'}</small></span><a class="btn btn-ghost btn-sm" href="${waLink(c.whatsapp||c.phone,campaignMessage(type,shop,c))}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a></div>`).join('')||'<p class="muted" style="font-size:13px">Nenhum cliente neste público agora.</p>'}
+    ${items.length>4?`<button class="btn btn-ghost btn-sm btn-block" style="margin-top:10px" onclick="openMarketingAudience('${key}')">Ver todos (${items.length})</button>`:''}
+  </div>`;
   return `<div class="page-head"><div><h2>Marketing</h2><p>Campanhas e automações para fidelizar e reativar</p></div><div class="page-actions"><button class="btn btn-primary" onclick="campaignForm()">${icon('plus')} Nova campanha</button></div></div>
-  <div class="panel"><div class="panel-head"><h3>${icon('zap')} Automações</h3><span class="badge ok">Ativas</span></div>
-    <div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('clock')}</span><div><b>Reativação de inativos (30 dias)</b><br><small>"Sentimos sua falta! Agende e ganhe 10% de desconto."</small></div><button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="sendSegmentCampaign('inativo')">Enviar agora</button></div>
-    <div class="mini-slot" style="margin:0"><span class="ic">${icon('gift')}</span><div><b>Aniversariantes</b><br><small>"Feliz aniversário! Aproveite um desconto especial."</small></div><button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="sendBirthday()">Enviar agora</button></div>
+  <div class="stat-grid">
+    ${statCard('c4','gift','Aniversariantes do mês',seg.birthdayMonth.length,'hoje: '+seg.birthdayToday.length)}
+    ${statCard('c1','clock','Inativos 30+ dias',seg.inactive30.length,'reativação')}
+    ${statCard('c5','alert','Inativos 90+ dias',seg.inactive90.length,'risco alto')}
+    ${statCard('c2','award','Clientes VIP',seg.vip.length,'maior valor')}
+  </div>
+  <div class="panel"><div class="panel-head"><h3>${icon('zap')} Públicos automáticos</h3><span class="badge ok">Prontos para ação</span></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+      ${autoCard('birthdayWeek','Aniversariantes da semana','Mensagem de relacionamento e benefício.','gift',seg.birthdayWeek,'birthday')}
+      ${autoCard('inactive30','Reativação 30+ dias','Clientes que já conhecem a barbearia e sumiram.','clock',seg.inactive30,'inactive30')}
+      ${autoCard('inactive60','Reativação 60+ dias','Oferta mais forte para recuperar recorrência.','repeat',seg.inactive60,'inactive60')}
+      ${autoCard('inactive90','Recuperação 90+ dias','Clientes em risco alto de perda.','alert',seg.inactive90,'inactive90')}
+    </div>
   </div>
   <div class="panel"><div class="panel-head"><h3>Campanhas promocionais</h3></div>
   <div class="table-wrap"><table><thead><tr><th>Campanha</th><th>Tipo</th><th>Desconto</th><th>Expira</th><th>Uso</th><th>Status</th><th></th></tr></thead><tbody>
@@ -391,7 +442,15 @@ function campaignForm(id){
 }
 function saveCampaign(id){const shop=dashShop();const name=$('#cp_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const data={name,type:$('#cp_type').value,discountType:$('#cp_dt').value,discountValue:+$('#cp_dv').value||0,usageLimit:+$('#cp_lim').value||0,expires:$('#cp_exp').value,active:$('#cp_active').classList.contains('on')};if(id)DB.update('campaigns',id,data);else DB.insert('campaigns',{barbershopId:shop.id,used:0,...data});DB.log(id?'Campanha editada':'Campanha criada',name,shop.id);closeModal();toast('Campanha salva.','ok');refreshShell();}
 function delCampaign(id){confirmAction('Excluir campanha?','',()=>{DB.remove('campaigns',id);toast('Campanha excluída.','info');refreshShell();});}
-function sendBirthday(){const shop=dashShop();const m=new Date().getMonth();const aniv=DB.scope('customers',shop.id).filter(c=>c.birthday&&new Date(c.birthday+'T00:00:00').getMonth()===m);toast(`Mensagem de aniversário enviada para ${aniv.length} cliente(s) este mês.`,'ok');DB.log('Campanha de aniversário enviada','',shop.id);}
+function openMarketingAudience(key){
+  const shop=dashShop(),seg=customerMarketingSegments(shop);
+  const map={birthdayWeek:['Aniversariantes da semana',seg.birthdayWeek,'birthday'],inactive30:['Inativos 30+ dias',seg.inactive30,'inactive30'],inactive60:['Inativos 60+ dias',seg.inactive60,'inactive60'],inactive90:['Inativos 90+ dias',seg.inactive90,'inactive90'],vip:['Clientes VIP',seg.vip,'inactive30']};
+  const [title,items,type]=map[key]||map.inactive30;
+  openModal(`<div class="modal-head"><div><h3>${escapeHtml(title)}</h3><div class="sub">${items.length} cliente(s)</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body">${items.map(c=>`<div class="mini-slot"><span class="ic">${initials(c.name)}</span><div><b>${escapeHtml(c.name)}</b><br><small>${escapeHtml(c.phone||c.email||'sem contato')} · ${c.st&&c.st.last?'última visita '+fmtDateShort(c.st.last):c.birthday?fmtDate(c.birthday):'sem histórico'}</small></div><a class="btn btn-ghost btn-sm" href="${waLink(c.whatsapp||c.phone,campaignMessage(type,shop,c))}" target="_blank" rel="noopener">${icon('whatsapp')} Enviar</a></div>`).join('')||emptyState('users','Nenhum cliente','Este público ainda está vazio.')}</div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button></div>`);
+}
+function sendBirthday(){const shop=dashShop();const aniv=customerMarketingSegments(shop).birthdayMonth;toast(`${aniv.length} aniversariante(s) no mês. Use os botões de WhatsApp para enviar mensagens personalizadas.`,'ok');DB.log('Campanha de aniversário preparada','',shop.id);}
 
 /* ---------- Inventory ---------- */
 /* stock movement helper — single source of truth for inventory changes */
@@ -501,6 +560,21 @@ function dashFinanceChart(shop){const a=shopAnalytics(shop.id);mkChart('finChart
 function exportFinance(){const shop=dashShop();const rows=[['Data','Cliente','Servico','Barbeiro','Valor','Status']];DB.scope('appointments',shop.id).forEach(a=>{const s=DB.find('services',a.serviceId),b=DB.find('barbers',a.barberId);rows.push([a.date,a.customerName,s?s.name:'',b?b.name:'',a.price,a.status]);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='financeiro-'+shop.slug+'.csv';a.click();toast('Relatório exportado.','ok');}
 
 /* ---------- AI Insights ---------- */
+function businessSnapshot(shop){
+  const a=shopAnalytics(shop.id),seg=customerMarketingSegments(shop);
+  const appts=DB.scope('appointments',shop.id),customers=seg.all,barbers=DB.scope('barbers',shop.id).filter(b=>b.active),services=DB.scope('services',shop.id).filter(s=>s.active);
+  const byBarber=barbers.map(b=>{const list=appts.filter(x=>x.barberId===b.id&&x.status!=='cancelado');return {name:b.name,appointments:list.length,revenue:list.reduce((s,x)=>s+(x.price||0),0),commission:b.commission||0};}).sort((x,y)=>y.appointments-x.appointments);
+  const byService=services.map(s=>{const list=appts.filter(x=>x.serviceId===s.id&&x.status!=='cancelado');return {name:s.name,appointments:list.length,revenue:list.reduce((sum,x)=>sum+(x.price||0),0),price:s.price||0,duration:s.duration||0};}).sort((x,y)=>y.appointments-x.appointments);
+  return {
+    shop:{name:shop.name,planId:shop.planId,open:shop.open,close:shop.close,professionals:barbers.length,services:services.length},
+    metrics:{appointmentsTotal:appts.length,customersTotal:customers.length,revenueToday:a.revToday,revenueMonth:a.revMonth,occupancy:a.occupancy,returningCustomers:a.returning,newCustomers:a.newCustomers},
+    customerSegments:{inactive30:seg.inactive30.length,inactive60:seg.inactive60.length,inactive90:seg.inactive90.length,birthdayToday:seg.birthdayToday.length,birthdayWeek:seg.birthdayWeek.length,birthdayMonth:seg.birthdayMonth.length,vip:seg.vip.length},
+    topServices:byService.slice(0,6),
+    team:byBarber.slice(0,6),
+    recentRevenueSeries:a.revSeries,
+    risks:{lowStock:DB.scope('products',shop.id).filter(p=>p.qty<=p.minStock).map(p=>({name:p.name,qty:p.qty,minStock:p.minStock})).slice(0,8)},
+  };
+}
 function dashAI(shop){
   const a=shopAnalytics(shop.id);const insights=[];
   // weekday occupancy
@@ -520,9 +594,27 @@ function dashAI(shop){
   // revenue trend
   const last=a.revSeries.slice(-3).reduce((s,x)=>s+x,0),prev=a.revSeries.slice(0,3).reduce((s,x)=>s+x,0);
   if(last>prev)insights.push(['pos','trending','Receita em crescimento','Sua receita dos últimos dias superou o início da semana. Continue investindo no que está funcionando.']);
-  return `<div class="page-head"><div><h2>Insights de IA</h2><p>Recomendações acionáveis geradas a partir dos seus dados</p></div><div class="page-actions"><span class="badge gold">${icon('cpu')} ${insights.length} recomendações</span></div></div>
+  const groqBtn=window.fbGenerateBusinessInsights?`<button class="btn btn-primary" onclick="generateGroqInsights()">${icon('sparkle')} Análise Groq</button>`:'';
+  return `<div class="page-head"><div><h2>Insights de IA</h2><p>Recomendações acionáveis geradas a partir dos seus dados</p></div><div class="page-actions">${groqBtn}<span class="badge gold">${icon('cpu')} ${insights.length} recomendações</span></div></div>
   ${insights.map(i=>`<div class="insight ${i[0]}"><span class="ii">${icon(i[1])}</span><div><b>${escapeHtml(i[2])}</b><p>${escapeHtml(i[3])}</p></div></div>`).join('')}
   <div class="panel" style="margin-top:8px"><div class="panel-head"><h3>Como funciona</h3></div><p class="muted" style="font-size:14px">Os insights são recalculados automaticamente com base em ocupação, demanda por profissional, recência dos clientes, estoque e tendência de receita. Use-os como ponto de partida para decisões de promoção, equipe e compras.</p></div>`;
+}
+async function generateGroqInsights(){
+  const shop=dashShop();
+  if(!window.fbGenerateBusinessInsights){toast('Groq ainda não está configurado no backend.','info');return;}
+  const btn=document.querySelector('.page-actions .btn-primary');const old=btn?btn.innerHTML:null;
+  try{
+    if(btn){btn.disabled=true;btn.innerHTML='Analisando…';}
+    const data=await fbGenerateBusinessInsights(shop.id,businessSnapshot(shop));
+    const insights=Array.isArray(data.insights)?data.insights:[];
+    openModal(`<div class="modal-head"><div><h3>${icon('sparkle')} Plano de ação Groq</h3><div class="sub">Score comercial: ${data.score!=null?data.score:'—'}/100</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+    <div class="modal-body">
+      <div class="insight pos" style="margin-bottom:14px"><span class="ii">${icon('target')}</span><div><b>Resumo executivo</b><p>${escapeHtml(data.summary||'Análise gerada com base nos dados atuais da barbearia.')}</p></div></div>
+      ${insights.map(i=>`<div class="insight ${i.priority==='alta'?'warn':'pos'}"><span class="ii">${icon(i.area==='equipe'?'users':i.area==='marketing'?'megaphone':i.area==='financeiro'?'dollar':'trending')}</span><div><b>${escapeHtml(i.title||'Ação recomendada')}</b><p>${escapeHtml(i.reason||'')}</p><p><b>Ação:</b> ${escapeHtml(i.action||'')}</p>${i.whatsapp?`<p><b>Mensagem:</b> ${escapeHtml(i.whatsapp)}</p>`:''}${i.kpi?`<small class="muted">KPI: ${escapeHtml(i.kpi)}</small>`:''}</div></div>`).join('')||'<p class="muted">Sem recomendações retornadas.</p>'}
+      ${(data.next7Days||[]).length?`<div class="panel" style="margin-top:12px"><div class="panel-head"><h3>Próximos 7 dias</h3></div>${data.next7Days.map(x=>`<div class="summary-line"><span>${escapeHtml(x)}</span></div>`).join('')}</div>`:''}
+    </div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button></div>`);
+  }catch(e){toast((e&&e.message)||'Não foi possível gerar análise Groq.','err');}
+  finally{if(btn&&old){btn.disabled=false;btn.innerHTML=old;}}
 }
 
 /* ---------- Config ---------- */
@@ -545,23 +637,27 @@ function dashConfig(shop){
     <div class="form-row"><div class="field"><label>Nome</label><input class="input" id="cf_name" value="${escapeHtml(shop.name)}"></div><div class="field"><label>Link público</label><div class="input" style="background:var(--surface-3);color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(shopPublicUrl(shop.slug).replace(/^https?:\/\//,''))}</div></div></div>
     <div class="field"><label>Logo da barbearia</label>
       <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
-        <div style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <div id="cf_logo_preview" style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0">
           ${shop.logoUrl?`<img src="${escapeHtml(shop.logoUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.4rem;font-weight:800;color:var(--primary)">${initials(shop.name)}</span>`}
         </div>
-        <div><label class="btn btn-ghost btn-sm" for="cf_logo_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.logoUrl?'Substituir logo':'Adicionar logo'}</label>
+        <div style="display:flex;flex-direction:column;gap:6px"><label class="btn btn-ghost btn-sm" for="cf_logo_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.logoUrl?'Substituir logo':'Adicionar logo'}</label>
+        ${shop.logoUrl?`<button type="button" class="btn btn-ghost btn-sm remove-logo-btn" onclick="clearShopLogo()" style="color:var(--danger);margin:0">${icon('trash')} Remover logo</button>`:''}
         <small class="muted" style="display:block;margin-top:4px">PNG, JPG ou WEBP · máx. 5MB</small></div>
       </div>
-      <input type="file" id="cf_logo_file" accept="image/jpeg,image/png,image/webp" style="display:none">
+      <input type="file" id="cf_logo_file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewLogo(this)">
+      <input type="hidden" id="cf_logo_remove" value="0">
     </div>
     <div class="field"><label>Foto de capa</label>
       <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
         <div id="cf_cover_preview" style="width:120px;height:68px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#242014,#0d0d0d);flex-shrink:0;display:flex;align-items:center;justify-content:center">
           ${shop.coverUrl?`<img src="${escapeHtml(shop.coverUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span class="muted" style="font-size:11px">Sem capa</span>`}
         </div>
-        <div><label class="btn btn-ghost btn-sm" for="cf_cover_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.coverUrl?'Substituir capa':'Adicionar capa'}</label>
+        <div style="display:flex;flex-direction:column;gap:6px"><label class="btn btn-ghost btn-sm" for="cf_cover_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.coverUrl?'Substituir capa':'Adicionar capa'}</label>
+        ${shop.coverUrl?`<button type="button" class="btn btn-ghost btn-sm remove-cover-btn" onclick="clearShopCover()" style="color:var(--danger);margin:0">${icon('trash')} Remover capa</button>`:''}
         <small class="muted" style="display:block;margin-top:4px">Aparece no topo da página pública · máx. 5MB</small></div>
       </div>
       <input type="file" id="cf_cover_file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewCover(this)">
+      <input type="hidden" id="cf_cover_remove" value="0">
     </div>
     <div class="field"><label>Descrição</label><textarea class="input" id="cf_desc">${escapeHtml(shop.description||'')}</textarea></div>
     <div class="field"><label>Endereço</label><input class="input" id="cf_addr" value="${escapeHtml(shop.address||'')}"></div>
@@ -576,6 +672,8 @@ function dashConfig(shop){
   <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="saveConfig()">${icon('check')} Salvar configurações</button></div>`;
 }
 async function saveConfig(){const shop=dashShop();const workDays=[...$$('#cf_days .chip-toggle.on')].map(el=>+el.dataset.day);const data={name:$('#cf_name').value.trim(),description:$('#cf_desc').value.trim(),address:$('#cf_addr').value.trim(),city:$('#cf_city').value.trim(),neighborhood:$('#cf_neigh').value.trim(),instagram:$('#cf_ig').value.trim(),phone:$('#cf_phone').value.trim(),whatsapp:$('#cf_wa').value.trim(),open:$('#cf_open').value,close:$('#cf_close').value,lunchStart:$('#cf_ls').value,lunchEnd:$('#cf_le').value,slotInterval:+$('#cf_int').value,workDays};
+  if($('#cf_logo_remove')&&$('#cf_logo_remove').value==='1'){if(shop.logoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(shop.logoPath).catch(()=>{});data.logoUrl='';data.logoPath='';}
+  if($('#cf_cover_remove')&&$('#cf_cover_remove').value==='1'){if(shop.coverPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(shop.coverPath).catch(()=>{});data.coverUrl='';data.coverPath='';}
   const file=$('#cf_logo_file')&&$('#cf_logo_file').files[0];
   if(file&&window.fbUploadTenantImage){try{toast('Enviando logo...','info');const up=await fbUploadTenantImage(shop.id,'logos',file,shop.logoPath);data.logoUrl=up.url;data.logoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar o logo.','err');return;}}
   const coverFile=$('#cf_cover_file')&&$('#cf_cover_file').files[0];

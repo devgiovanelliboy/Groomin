@@ -1,5 +1,5 @@
 /**
- * BarberOS — Cloud Functions (Gen 2, Node 20)
+ * Groomin — Cloud Functions (Gen 2, Node 22)
  * Projeto: groomin-952d0
  *
  * Responsabilidades de segurança:
@@ -27,6 +27,13 @@ const slugify = (s) =>
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
+const PLAN_META = {
+  growth: { price: 69 },
+  pro: { price: 119 },
+  elite: { price: 179 },
+};
+const normalizePlanId = (id) => Object.prototype.hasOwnProperty.call(PLAN_META, id) ? id : "growth";
 
 const timeToMin = (t) => {
   const [h, m] = String(t).split(":").map(Number);
@@ -73,6 +80,8 @@ exports.bootstrapTenant = onCall(async (request) => {
 
   const name = (request.data.shopName || "").trim();
   const ownerName = (request.data.ownerName || "").trim();
+  const planId = normalizePlanId(request.data.planId);
+  const plan = PLAN_META[planId];
   if (name.length < 2) throw new HttpsError("invalid-argument", "Nome da barbearia inválido.");
 
   // slug único
@@ -97,11 +106,11 @@ exports.bootstrapTenant = onCall(async (request) => {
   const batch = db.batch();
   batch.set(tenantRef, {
     name, slug, ownerName, ownerUid: uid,
-    description: "Barbearia cadastrada no BarberOS.",
+    description: "Barbearia cadastrada no Groomin.",
     phone: request.data.phone || "", whatsapp: request.data.phone || "",
     email: request.auth.token.email || "",
     open: "09:00", close: "19:00", lunchStart: "12:00", lunchEnd: "13:00",
-    slotInterval: 30, status: "active", planId: "free", rating: 0,
+    slotInterval: 30, status: "active", planId, rating: 0,
     createdAt: now,
   });
   batch.set(db.doc(`users/${uid}`), {
@@ -110,8 +119,9 @@ exports.bootstrapTenant = onCall(async (request) => {
     role: "owner", tenantId: tid, active: true, createdAt: now,
   }, { merge: true });
   batch.set(db.doc(`subscriptions/${tid}`), {
-    tenantId: tid, planId: "free", status: "active", mrr: 0,
-    startedAt: now, renewsAt: now,
+    tenantId: tid, planId, status: "active", mrr: plan.price,
+    startedAt: now,
+    renewsAt: new Date(Date.now() + 30 * 86400000),
   });
   // serviço + barbeiro iniciais
   batch.set(tenantRef.collection("services").doc(), {
@@ -159,7 +169,7 @@ exports.provisionUser = onCall(async (request) => {
 //    Evita escrita aberta no Firestore (anti-spam / integridade).
 // ------------------------------------------------------------
 exports.createPublicBooking = onCall(async (request) => {
-  const { tenantId, serviceId, barberId, date, time, name, phone, email } = request.data || {};
+  const { tenantId, serviceId, barberId, date, time, name, phone, email, birthday, customerId: requestedCustomerId } = request.data || {};
   if (!tenantId || !serviceId || !barberId || !date || !time || !name || !phone) {
     throw new HttpsError("invalid-argument", "Dados de agendamento incompletos.");
   }
@@ -194,30 +204,39 @@ exports.createPublicBooking = onCall(async (request) => {
       }
     }
     // cliente: encontra por telefone ou cria
-    let customerId = null;
-    const custQ = await tx.get(
-      db.collection(`tenants/${tenantId}/customers`).where("phone", "==", phone).limit(1)
-    );
-    if (!custQ.empty) customerId = custQ.docs[0].id;
-    else {
+    let customerId = requestedCustomerId || null;
+    if (customerId) {
+      const cRef = db.doc(`tenants/${tenantId}/customers/${customerId}`);
+      const cSnap = await tx.get(cRef);
+      if (!cSnap.exists) customerId = null;
+    }
+    if (!customerId) {
+      const custQ = await tx.get(
+        db.collection(`tenants/${tenantId}/customers`).where("phone", "==", phone).limit(1)
+      );
+      if (!custQ.empty) customerId = custQ.docs[0].id;
+    }
+    if (!customerId) {
       const cRef = db.collection(`tenants/${tenantId}/customers`).doc();
-      tx.set(cRef, { tenantId, name, phone, whatsapp: phone, email: email || "", notes: "", createdAt: FieldValue.serverTimestamp() });
+      tx.set(cRef, { tenantId, barbershopId: tenantId, name, phone, whatsapp: phone, email: email || "", birthday: birthday || "", notes: "", createdAt: FieldValue.serverTimestamp() });
       customerId = cRef.id;
+    } else if (birthday) {
+      tx.set(db.doc(`tenants/${tenantId}/customers/${customerId}`), { birthday }, { merge: true });
     }
     const aRef = db.collection(`tenants/${tenantId}/appointments`).doc();
     tx.set(aRef, {
-      tenantId, customerId, customerName: name, phone,
+      tenantId, barbershopId: tenantId, customerId, customerName: name, phone,
       serviceId, barberId, date, time, duration: svc.duration || 30,
       status: "confirmado", price: svc.price || 0, source: "public",
       createdAt: FieldValue.serverTimestamp(),
     });
     tx.set(db.collection(`tenants/${tenantId}/notifications`).doc(), {
-      tenantId, type: "confirm", title: "Novo agendamento",
+      tenantId, barbershopId: tenantId, barberId, type: "confirm", title: "Novo agendamento",
       msg: `${name} — ${svc.name} ${date} ${time}`, read: false,
       time: Date.now(),
     });
-    return aRef.id;
+    return { appointmentId: aRef.id, customerId };
   });
 
-  return { appointmentId: apptId };
+  return apptId;
 });

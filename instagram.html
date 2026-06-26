@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Groomin está chegando: agenda online, gestão e crescimento para barbearias." />
+<meta name="theme-color" content="#0F0F0F" />
+<meta property="og:title" content="Groomin — gestão para barbearias" />
+<meta property="og:description" content="Uma plataforma para organizar agenda, clientes, caixa e crescimento da sua barbearia." />
+<meta property="og:type" content="website" />
+<title>Groomin — Em breve</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png" />
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0f0f0f;
+    --panel:#171717;
+    --text:#f7f2e7;
+    --muted:#b8b0a1;
+    --line:rgba(255,255,255,.12);
+    --gold:#d4af37;
+    --gold-ink:#171104;
+    --green:#25d366;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:
+      radial-gradient(circle at 18% 18%,rgba(212,175,55,.18),transparent 34%),
+      linear-gradient(145deg,#181818 0%,#080808 62%,#111 100%);
+    color:var(--text);
+  }
+  main{min-height:100vh;display:grid;place-items:center;padding:28px 18px}
+  .wrap{width:min(100%,760px);display:grid;gap:24px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:46px;height:46px;border-radius:14px;background:#0f0f0f;border:1px solid var(--line);display:grid;place-items:center;box-shadow:0 18px 48px rgba(0,0,0,.34)}
+  .mark img{width:30px;height:30px}
+  .brand b{display:block;font-size:20px;letter-spacing:.02em}
+  .brand span{display:block;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+  .hero{padding:34px 0 8px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--gold);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.1em;background:rgba(255,255,255,.04)}
+  h1{font-size:clamp(42px,10vw,84px);line-height:.95;margin:22px 0 18px;letter-spacing:0}
+  p{font-size:clamp(17px,4vw,21px);line-height:1.55;color:var(--muted);margin:0;max-width:650px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .btn{min-height:52px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;font-weight:900;color:var(--text);border:1px solid var(--line);background:rgba(255,255,255,.06)}
+  .btn.primary{background:linear-gradient(135deg,#f0d56f,var(--gold));color:var(--gold-ink);border-color:transparent}
+  .btn.whatsapp{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.28);color:#dff8e8}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+  .tile{min-height:122px;border:1px solid var(--line);background:rgba(255,255,255,.055);border-radius:18px;padding:18px}
+  .tile strong{display:block;font-size:16px;margin-bottom:8px}
+  .tile small{display:block;color:var(--muted);line-height:1.45;font-size:13px}
+  .note{border-top:1px solid var(--line);padding-top:18px;color:#928a7d;font-size:13px}
+  @media (max-width:680px){
+    main{place-items:start center;padding-top:24px}
+    .grid{grid-template-columns:1fr}
+    .actions .btn{width:100%}
+    .hero{padding-top:26px}
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="wrap" aria-label="Groomin em breve">
+    <div class="brand">
+      <span class="mark"><img src="icon.svg" alt="" /></span>
+      <div><b>Groomin</b><span>Para barbearias</span></div>
+    </div>
+
+    <div class="hero">
+      <span class="eyebrow">Agenda, caixa e clientes em um só lugar</span>
+      <h1>Sua barbearia mais organizada antes mesmo do primeiro corte do dia.</h1>
+      <p>Estamos preparando uma plataforma simples e completa para donos de barbearia controlarem agenda, clientes, equipe, financeiro e crescimento direto do celular.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://wa.me/5511999990000?text=Quero%20entrar%20na%20lista%20do%20Groomin" target="_blank" rel="noopener">Entrar na lista</a>
+        <a class="btn whatsapp" href="https://wa.me/5511999990000?text=Vim%20pelo%20Instagram%20e%20quero%20saber%20mais%20sobre%20o%20Groomin" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="tile"><strong>Agenda online</strong><small>Clientes escolhem serviço, profissional e horário sem troca infinita de mensagens.</small></div>
+      <div class="tile"><strong>Gestão do salão</strong><small>Equipe, serviços, clientes, estoque e caixa organizados em uma rotina só.</small></div>
+      <div class="tile"><strong>Crescimento</strong><small>Indicadores para entender faturamento, ocupação e oportunidades da barbearia.</small></div>
+    </div>
+
+    <div class="note">Link temporário para Instagram enquanto a plataforma final está em desenvolvimento.</div>
+  </section>
+</main>
+</body>
+</html>

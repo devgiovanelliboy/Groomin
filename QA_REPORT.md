@@ -1,4 +1,4 @@
-# BarberOS — Revisão de QA (Arquitetura · Firebase · Mobile · QA)
+# Groomin — Revisão de QA (Arquitetura · Firebase · Mobile · QA)
 
 Revisão conduzida nos papéis de **Arquiteto de Software Sênior**, **Engenheiro Firebase Sênior**,
 **Desenvolvedor Mobile Sênior** e **Engenheiro de QA Sênior**. Severidade: 🔴 crítica · 🟠 alta · 🟡 média · 🟢 ok.
@@ -44,7 +44,7 @@ Revisão conduzida nos papéis de **Arquiteto de Software Sênior**, **Engenheir
 | 5.1 | Sem push | 🟠 | **Corrigido** — `push`/`notificationclick` no SW + `enablePush()` (FCM). |
 | 5.2 | Sem background sync | 🟡 | **Corrigido** — `sync`/`periodicsync` avisam o cliente; Firestore reenfileira escritas offline. |
 | 5.3 | Atualização do SW | 🟡 | **Corrigido** — `Cache-Control: no-cache` no `sw.js`/`index.html`; toast de "nova versão". |
-| 5.4 | Splash iOS | 🟢 | Android via `manifest` (`background_color`/ícones). iOS exige PNGs `apple-touch-startup-image` (gerar por dispositivo — pendente, não bloqueia). |
+| 5.4 | Splash iOS | 🟢 | **Corrigido** — PNGs PWA/iOS gerados em `assets/pwa/`; `apple-touch-icon` e `apple-touch-startup-image` ligados no shell público e no `/app/`. |
 
 ## 6. Segurança HTTP / Hosting
 | # | Achado | Sev | Status |
@@ -64,11 +64,11 @@ Revisão conduzida nos papéis de **Arquiteto de Software Sênior**, **Engenheir
 ---
 
 ## Itens recomendados antes do "go-live comercial"
-1. App Check (reCAPTCHA) nas callables para anti-abuso.
-2. Verificação de e-mail e rate-limit no `createPublicBooking` (App Check cobre boa parte).
-3. Paginação nas listas grandes (agendamentos/vendas) e listeners por janela de data.
+1. App Check (reCAPTCHA) nas callables para anti-abuso — client já inicializa com `FIREBASE_APPCHECK_SITE_KEY`; falta exigir/enforce no Console depois de testar os fluxos reais.
+2. Verificação de e-mail e rate-limit adicional no `createPublicBooking` (App Check cobre boa parte).
+3. Listeners por janela de data para alto volume; a paginação visual de agendamentos/CRM/vendas já foi adicionada.
 4. Backups automáticos do Firestore + alertas de billing.
-5. Imagens de splash iOS e screenshots no manifest (loja/PWA).
+5. Screenshots no manifest (loja/PWA).
 
 **Conclusão:** a fundação multi-tenant, segurança (Rules + claims + booking server-side),
 tempo real/offline, mobile e PWA estão prontas e corretas. Os itens "recomendados" são
