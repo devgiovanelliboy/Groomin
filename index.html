@@ -1,30 +1,39 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="description" content="Groomin — crie sua página profissional de agendamento em menos de 5 minutos." />
-<meta name="theme-color" content="#0F0F0F" />
-<link rel="manifest" href="manifest.webmanifest" />
-<link rel="icon" type="image/svg+xml" href="icon.svg" />
-<link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png" />
+<meta name="description" content="Groomin — crie uma página profissional de agendamentos em menos de 5 minutos. Seus clientes agendam online pelo seu link, sem baixar aplicativo." />
+<meta name="theme-color" content="#F8FAFC" />
+<link rel="manifest" href="manifest.webmanifest?v=20260703-logo" />
+<link rel="icon" type="image/png" sizes="48x48" href="assets/pwa/favicon-48.png?v=20260703-logo" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/pwa/favicon-32.png?v=20260703-logo" />
+<link rel="apple-touch-icon" href="assets/pwa/apple-touch-icon.png?v=20260703-logo" />
 <link rel="apple-touch-startup-image" href="assets/pwa/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
 <link rel="apple-touch-startup-image" href="assets/pwa/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
 <link rel="apple-touch-startup-image" href="assets/pwa/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Groomin" />
 <meta name="application-name" content="Groomin" />
-<meta property="og:title" content="Groomin — Página profissional de agendamento" />
-<meta property="og:description" content="Crie sua página profissional de agendamento em menos de 5 minutos." />
+<meta property="og:title" content="Groomin — Página profissional de agendamentos" />
+<meta property="og:description" content="Compartilhe um link exclusivo e permita que seus clientes agendem horários online sem baixar aplicativo." />
 <meta property="og:type" content="website" />
-<title>Groomin — Página profissional de agendamento</title>
+<title>Groomin — Página profissional de agendamentos</title>
 <link rel="canonical" href="https://groomin.com.br/" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css?v=20260701-0100" />
+<script>
+(function(){
+  var h=location.hash||'';
+  if(/^#\/(dashboard|admin|signup|login|stripe|cliente)(\/|$|\?)/.test(h)){
+    location.replace('/app/'+h);
+  }
+})();
+</script>
 </head>
 <body>
 <div class="ambient"></div>
@@ -32,9 +41,13 @@
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="js/01-icons.js"></script>
-<script src="js/02-data-core.js"></script>
-<script src="js/03-analytics-landing.js"></script>
-<script src="js/landing-bridge.js"></script>
+<script src="js/firebase-config.js?v=20260701-0100"></script>
+<script src="js/01-icons.js?v=20260701-0100"></script>
+<script src="js/02-data-core.js?v=20260701-0100"></script>
+<script src="js/03-analytics-landing.js?v=20260701-0100"></script>
+<script src="js/04-public-booking.js?v=20260701-0100"></script>
+<script src="js/firebase-adapter.js?v=20260701-0100"></script>
+<script src="js/09-pwa.js?v=20260701-0100"></script>
+<script src="js/landing-bridge.js?v=20260701-0100"></script>
 </body>
 </html>

@@ -1,39 +1,27 @@
 /* Groomin — Service Worker
-   Estratégia: precache do app shell + stale-while-revalidate para o resto
-   (inclui CDNs de fonte e Chart.js, cacheados na primeira visita online).
+   Estratégia online-first: não guarda shell/código em cache.
+   O Firestore é a fonte de verdade; cada navegação deve buscar a versão atual.
 */
-const VERSION = 'groomin-mvp-v15';
-const APP_SHELL = [
-  './',
-  './index.html',
-  './app/index.html',
-  './styles.css',
-  './manifest.webmanifest',
-  './icon.svg',
-  './js/firebase-config.js',
-  './js/firebase-adapter.js',
-  './js/01-icons.js',
-  './js/02-data-core.js',
-  './js/03-analytics-landing.js',
-  './js/04-public-booking.js',
-  './js/05-admin.js',
-  './js/06-dashboard.js',
-  './js/09-pwa.js'
-];
+const VERSION = 'groomin-live-v24';
+
+const OFFLINE_HTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sem conexão — Groomin</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;background:#F8FAFC;color:#111827;display:grid;place-items:center;min-height:100vh;text-align:center;padding:24px}
+.box{max-width:340px}.mark{width:72px;height:72px;border-radius:20px;margin:0 auto 20px;display:block}
+h1{font-size:20px;margin:0 0 8px}p{color:#64748B;font-size:14.5px;line-height:1.6;margin:0 0 24px}
+button{background:#7C3AED;color:#fff;border:none;border-radius:10px;padding:13px 26px;font-size:15px;font-weight:700;cursor:pointer}</style></head>
+<body><div class="box"><img class="mark" src="/assets/pwa/logo-mark-192.png" alt="Groomin" onerror="this.style.display='none'">
+<h1>Você está sem internet</h1><p>Não foi possível carregar o Groomin. Verifique sua conexão e tente novamente.</p>
+<button onclick="location.reload()">Tentar novamente</button></div></body></html>`;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(VERSION)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-      .catch(() => {})
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({ type: 'window' }))
       .then((clients) => clients.forEach((c) => c.postMessage({ type: 'SW_UPDATED' })))
@@ -51,46 +39,33 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Navegações: network-first com fallback para o shell offline.
-  if (req.mode === 'navigate') {
-    const shell = url.pathname === '/app' || url.pathname.startsWith('/app/') ? './app/index.html' : './index.html';
+  // Navegações, JS e CSS: sempre rede, sem cache do navegador/SW.
+  if (req.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     event.respondWith(
-      fetch(req).catch(() => caches.match(shell).then((r) => r || caches.match('./')))
+      fetch(new Request(req, { cache: 'no-store' }))
+        .catch(() => new Response(req.mode === 'navigate' ? OFFLINE_HTML : 'Sem conexão.', {
+          status: 503,
+          headers: { 'Content-Type': req.mode === 'navigate' ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8' }
+        }))
     );
     return;
   }
 
-  // JS e CSS: network-first — clientes sempre executam a versão mais recente.
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+  // Ícones da marca: cache-first (aparecem até na página offline)
+  if (url.pathname.startsWith('/assets/pwa/')) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const copy = res.clone();
-            caches.open(VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
-          }
-          return res;
-        })
-        .catch(() => caches.match(req))
+      caches.open(VERSION).then(async (cache) => {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      }).catch(() => fetch(req))
     );
     return;
   }
 
-  // Demais assets (imagens, fontes, CDN): stale-while-revalidate.
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((res) => {
-          if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
-            const copy = res.clone();
-            caches.open(VERSION).then((cache) => cache.put(req, copy)).catch(() => {});
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+  event.respondWith(fetch(req));
 });
 
 // ============================================================
@@ -103,8 +78,8 @@ self.addEventListener('push', (event) => {
   const title = n.title || 'Groomin';
   const options = {
     body: n.body || 'Você tem uma nova atualização.',
-    icon: './icon.svg',
-    badge: './icon.svg',
+    icon: './assets/pwa/logo-mark-192.png',
+    badge: './assets/pwa/logo-mark-192.png',
     tag: n.tag || 'barberos',
     data: { url: (data.fcmOptions && data.fcmOptions.link) || n.click_action || './' },
     vibrate: [60, 30, 60]

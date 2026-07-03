@@ -5,29 +5,73 @@
 function dashShop(){const u=Session.effectiveUser;return DB.find('barbershops',u.barbershopId);}
 let agendaDate=null,agendaView='dia',finPeriod='mes',crmSeg='todos',agendaPage=1,crmPage=1;
 const PAGE_SIZE=30;
+const DASH_CHART_PRIMARY='#7C3AED';
+const BUSINESS_CATEGORIES=[
+  ['barbershop','Barbearia'],['hair-salon','Salão de cabelo'],['nail-designer','Nail designer'],['lash-designer','Lash designer'],
+  ['makeup-artist','Maquiadora'],['beauty-clinic','Clínica de estética'],['tattoo-studio','Estúdio de tatuagem'],
+  ['massage-therapist','Massoterapeuta'],['personal-trainer','Personal trainer'],['nutritionist','Nutricionista'],
+  ['physiotherapist','Fisioterapeuta'],['dentist','Dentista'],['photographer','Fotógrafo'],['consultant','Consultor'],['other','Outro']
+];
+const BUSINESS_THEMES=[
+  ['elegant-dark','Elegant Dark'],['luxury-gold','Luxury Gold'],['rose-pink','Rose Pink'],['royal-purple','Royal Purple'],
+  ['ruby-red','Ruby Red'],['ocean-blue','Ocean Blue'],['emerald','Emerald'],['sunset-orange','Sunset Orange']
+];
+const BUSINESS_SERVICE_CATEGORIES={
+  'barbershop':['Cabelo','Barba','Sobrancelha','Combo','Tratamento'],
+  'hair-salon':['Corte','Escova','Coloração','Tratamento','Penteado'],
+  'nail-designer':['Manicure','Pedicure','Alongamento','Manutenção','Nail art'],
+  'lash-designer':['Extensão de cílios','Manutenção','Remoção','Design','Lash lifting'],
+  'makeup-artist':['Maquiagem social','Noiva','Produção','Aula','Evento'],
+  'beauty-clinic':['Facial','Corporal','Depilação','Avaliação','Estética avançada'],
+  'tattoo-studio':['Tatuagem','Retoque','Consulta','Piercing','Projeto'],
+  'massage-therapist':['Relaxante','Terapêutica','Drenagem','Reflexologia','Bem-estar'],
+  'personal-trainer':['Treino','Avaliação','Consultoria','Plano mensal','Acompanhamento'],
+  'nutritionist':['Consulta','Retorno','Plano alimentar','Avaliação','Acompanhamento'],
+  'physiotherapist':['Avaliação','Sessão','Reabilitação','Pilates','Tratamento'],
+  'dentist':['Consulta','Limpeza','Avaliação','Procedimento','Retorno'],
+  'photographer':['Ensaio','Retrato','Evento','Edição','Reunião'],
+  'consultant':['Consultoria','Mentoria','Diagnóstico','Reunião','Projeto'],
+  'other':['Atendimento','Consulta','Retorno','Serviço','Pacote']
+};
+const BUSINESS_ROLE_DEFAULTS={
+  'barbershop':'Barbeiro','hair-salon':'Cabeleireiro','nail-designer':'Nail designer','lash-designer':'Lash designer',
+  'makeup-artist':'Maquiador(a)','beauty-clinic':'Esteticista','tattoo-studio':'Tatuador','massage-therapist':'Massoterapeuta',
+  'personal-trainer':'Personal trainer','nutritionist':'Nutricionista','physiotherapist':'Fisioterapeuta','dentist':'Dentista',
+  'photographer':'Fotógrafo','consultant':'Consultor','other':'Profissional'
+};
+function serviceCategoriesFor(shop){return BUSINESS_SERVICE_CATEGORIES[(shop&&shop.category)||'other']||BUSINESS_SERVICE_CATEGORIES.other;}
+function defaultRoleFor(shop){return BUSINESS_ROLE_DEFAULTS[(shop&&shop.category)||'other']||'Profissional';}
+function themeSlug(v){return String(v||'ocean-blue').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'ocean-blue';}
+function applyBusinessTheme(shop){document.documentElement.setAttribute('data-business-theme',themeSlug(shop&&shop.themeId));}
+function previewConfigTheme(value){applyBusinessTheme({themeId:value});const s=$('#cf_theme_status');if(s)s.textContent='Pré-visualização ativa. Clique em Aplicar tema para salvar.';}
 function pageSlice(list,page,size=PAGE_SIZE){const pages=Math.max(1,Math.ceil(list.length/size));const p=Math.min(Math.max(1,page||1),pages);return {items:list.slice((p-1)*size,p*size),page:p,pages,total:list.length};}
 function pageControls(state,setter){if(state.pages<=1)return '';return `<div class="pager"><button class="btn btn-ghost btn-sm" ${state.page<=1?'disabled':''} onclick="${setter}(${state.page-1})">${icon('arrowLeft')} Anterior</button><span class="muted">Página ${state.page} de ${state.pages} · ${state.total} itens</span><button class="btn btn-ghost btn-sm" ${state.page>=state.pages?'disabled':''} onclick="${setter}(${state.page+1})">Próxima ${icon('arrowRight')}</button></div>`;}
 function setAgendaPage(p){agendaPage=p;refreshShell();}
 function setCrmPage(p){crmPage=p;refreshShell();}
 
 function buildDashNav(shop){
-  const a=shopAnalytics(shop.id);
-  const nav=[{section:'Menu'},{id:'',label:'Dashboard',icon:'grid'},{id:'agenda',label:'Appointments',icon:'calendar',count:a.today.length}];
-  if(can('manage_barbers'))nav.push({id:'barbeiros',label:'Professionals',icon:'scissors'});
-  if(can('manage_services'))nav.push({id:'servicos',label:'Services',icon:'list'});
-  if(can('manage_settings'))nav.push({id:'config',label:'Settings',icon:'settings'},{id:'assinatura',label:'Subscription',icon:'creditCard'});
+  const activeAppts=DB.scope('appointments',shop.id).filter(x=>x.status!=='cancelado').length;
+  const nav=[{section:'Menu'},{id:'',label:'Painel',icon:'grid'},{id:'agenda',label:'Agendamentos',icon:'calendar',count:activeAppts}];
+  if(can('manage_barbers'))nav.push({id:'barbeiros',label:'Colaboradores',icon:'users'});
+  if(can('manage_services'))nav.push({id:'servicos',label:'Serviços',icon:'list'});
+  if(can('manage_inventory'))nav.push({id:'estoque',label:'Produtos',icon:'box'});
+  if(can('manage_settings'))nav.push({id:'config',label:'Configurações',icon:'settings'},{id:'assinatura',label:'Assinatura',icon:'creditCard'});
   return nav;
+}
+function dashboardTenantPill(shop){
+  return `<div class="tenant-pill tenant-edit" onclick="shellGo('#/dashboard/config')"><div class="tl">${brandLogo(shop)}</div><div class="info"><b>Editar página e fotos</b><span>Logo, capa, endereço e horários</span></div>${icon('edit')}</div>`;
 }
 function renderDashboard(r){
   destroyCharts();
   const shop=dashShop();
+  if(shop)applyBusinessTheme(shop);
   if(!shop){
     // Firebase: dados do tenant ainda não chegaram via onSnapshot — exibe skeleton enquanto aguarda
     if(window.__FB_ENABLED && Session.effectiveUser && Session.effectiveUser.barbershopId){
       $('#root').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px">
         <div class="skeleton" style="width:48px;height:48px;border-radius:50%"></div>
         <div class="skeleton" style="width:200px;height:16px;border-radius:6px"></div>
-        <p class="muted" style="font-size:13px">Carregando sua barbearia…</p>
+        <p class="muted" style="font-size:13px">Carregando seu negócio...</p>
       </div>`;
       // Fallback: se em 8s ainda não chegou, algo deu errado
       if(!window._dashLoadTimeout) window._dashLoadTimeout=setTimeout(()=>{
@@ -40,29 +84,29 @@ function renderDashboard(r){
   }
   window._dashLoadTimeout&&clearTimeout(window._dashLoadTimeout);window._dashLoadTimeout=null;
   const sub=r.sub||'';
-  const activeSubs=['','agenda','barbeiros','servicos','config','assinatura'];
-  const titles={'':'Dashboard',agenda:'Appointments',barbeiros:'Professionals',servicos:'Services',assinatura:'Subscription',config:'Settings'};
+  const activeSubs=['','agenda','barbeiros','servicos','estoque','config','assinatura'];
+  const titles={'':'Painel',agenda:'Agendamentos',barbeiros:'Colaboradores',servicos:'Serviços',estoque:'Produtos',assinatura:'Assinatura',config:'Configurações'};
   // guard sub-permission
-  const permMap={barbeiros:'manage_barbers',servicos:'manage_services',assinatura:'manage_settings',config:'manage_settings'};
+  const permMap={barbeiros:'manage_barbers',servicos:'manage_services',estoque:'manage_inventory',assinatura:'manage_settings',config:'manage_settings'};
   if(!activeSubs.includes(sub)||!productModuleEnabled(sub)){
-    const tenantPill=`<div class="tenant-pill" onclick="Router.go('#/'+'${shop.slug}')"><div class="tl">${brandLogo(shop)}</div><div class="info"><b>${escapeHtml(shop.name)}</b><span>${DB.find('plans',shop.planId).name} · /${escapeHtml(shop.slug)}</span></div>${icon('eye')}</div>`;
-    $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Agendamento',nav:buildDashNav(shop),activeId:'',navBase:'#/dashboard/',title:'Inactive module',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content:inactiveDashboardModule(sub),tenantPill});
+    const tenantPill=dashboardTenantPill(shop);
+    $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Agendamento',nav:buildDashNav(shop),activeId:'',navBase:'#/dashboard/',title:'Módulo inativo',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content:inactiveDashboardModule(sub),tenantPill});
     renderShellNotif();
     return;
   }
   if(permMap[sub]&&!can(permMap[sub])){toast('Sem permissão para esta área.','err');location.hash='#/dashboard';return;}
-  const renderers={'':dashOverview,agenda:dashAgenda,barbeiros:dashBarbers,servicos:dashServices,assinatura:dashSubscription,config:dashConfig};
+  const renderers={'':dashOverview,agenda:dashAgenda,barbeiros:dashBarbers,servicos:dashServices,estoque:dashInventory,assinatura:dashSubscription,config:dashConfig};
   const lock=featureLock(shop.id,sub);
   const content=lock?lockedFeaturePage(lock.label,lock.plan,lock.enterprise):(renderers[sub]||dashOverview)(shop);
-  const tenantPill=`<div class="tenant-pill" onclick="Router.go('#/'+'${shop.slug}')"><div class="tl">${brandLogo(shop)}</div><div class="info"><b>${escapeHtml(shop.name)}</b><span>${DB.find('plans',shop.planId).name} · /${escapeHtml(shop.slug)}</span></div>${icon('eye')}</div>`;
+  const tenantPill=dashboardTenantPill(shop);
   $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Agendamento',nav:buildDashNav(shop),activeId:sub,navBase:'#/dashboard/',title:titles[sub]||'Painel',crumb:shop.name+' · '+ROLE_LABEL[Session.effectiveUser.role],content,tenantPill});
   renderShellNotif();
 }
 function inactiveDashboardModule(sub){
   const label=futureModuleLabel(sub);
   return `<div class="empty" style="padding:64px 20px"><div class="ei" style="background:var(--surface-2);color:var(--muted)">${icon('lock')}</div>
-    <h3>${escapeHtml(label)} is inactive</h3>
-    <p style="max-width:520px;margin:0 auto">The owner dashboard is focused on booking operations. This module remains preserved in the codebase for a future phase.</p>
+    <h3>${escapeHtml(label)} está inativo</h3>
+    <p style="max-width:520px;margin:0 auto">O painel do dono está focado na operação de agendamentos. Este módulo permanece no código para uma fase futura.</p>
   </div>`;
 }
 
@@ -72,15 +116,16 @@ function bookingUrlCard(shop){
   const fullUrl=shopPublicUrl(shop.slug);
   const displayUrl=fullUrl.replace(/^https?:\/\//,'');
   const waText=encodeURIComponent(`Agende na ${shop.name}: ${fullUrl}`);
-  return `<div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(212,175,55,.07),transparent),var(--surface)">
-    <div class="panel-head"><div><h3>${icon('link')} Quick Actions</h3><div class="sub">Share your booking page</div></div></div>
+  const cover=shop.coverUrl?`background-image:linear-gradient(180deg,rgba(17,24,39,.08),rgba(17,24,39,.42)),url('${escapeHtml(shop.coverUrl)}');background-size:cover;background-position:center;`:'background:linear-gradient(135deg,rgba(124,58,237,.07),transparent),var(--surface);';
+  return `<div class="panel" style="border-color:var(--primary);min-height:310px;display:flex;flex-direction:column;justify-content:flex-end;${cover}">
+    <div class="panel-head"><div><h3>${icon('link')} Ações rápidas</h3><div class="sub">Compartilhe sua página de agendamento</div></div></div>
     <div class="input" style="background:var(--surface-3);display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:default">
       <b style="color:var(--primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(displayUrl)}</b>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" onclick="groomCopyUrl('${shop.slug}')">${icon('copy')} Copy Link</button>
-      <button class="btn btn-ghost btn-sm" onclick="Router.go('#/${shop.slug}')">${icon('externalLink')} Open Booking Page</button>
-      <a class="btn btn-ghost btn-sm" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp Share</a>
+      <button class="btn btn-primary btn-sm" onclick="groomCopyUrl('${shop.slug}')">${icon('copy')} Copiar link</button>
+      <button class="btn btn-ghost btn-sm" onclick="Router.go('#/${shop.slug}')">${icon('externalLink')} Abrir página</button>
+      <a class="btn btn-ghost btn-sm" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">${icon('whatsapp')} Compartilhar no WhatsApp</a>
       <button class="btn btn-ghost btn-sm" onclick="groomQR('${shop.slug}','${escapeHtml(shop.name)}')">${icon('grid')} QR Code</button>
     </div>
   </div>`;
@@ -117,24 +162,38 @@ function dashOverview(shop){
   const upcoming=a.upcoming.filter(x=>x.status!=='cancelado'&&(x.date>today||(x.date===today&&timeToMin(x.time)>=nowMin))).slice(0,8);
   const apptMini=(ap)=>{const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);return `<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('calendar')}</span><div><b>${escapeHtml(ap.customerName||'Cliente')}</b><br><small>${fmtDateShort(ap.date)} · ${ap.time} · ${s?escapeHtml(s.name):'Serviço'}${b?' · '+escapeHtml(b.name.split(' ')[0]):''}</small></div><span class="badge ${STATUS[ap.status].cls}" style="margin-left:auto">${STATUS[ap.status].label}</span></div>`;};
   return `${bookingUrlCard(shop)}
+  ${shop.schedulePaused?`<div class="insight warn" style="margin-bottom:14px"><span class="ii">${icon('clock')}</span><div><b>Agenda pausada</b><p>Clientes veem "Agenda pausada" e não conseguem criar novos agendamentos.</p></div><button class="btn btn-primary btn-sm" onclick="toggleSchedulePause()">${icon('play')} Retomar</button></div>`:''}
   <div class="stat-grid">
-    ${statCard('c1','calendar',"Today's Appointments",todayList.length,'')}
-    ${statCard('c2','clock','Upcoming Appointments',a.upcoming.length,'')}
-    ${statCard('c3','users','Customers',DB.scope('customers',shop.id).length,'')}
-    ${statCard('c4','dollar',"Today's Revenue",money(a.revToday),'')}
+    ${statCard('c1','calendar','Agendamentos de hoje',todayList.length,'')}
+    ${statCard('c2','clock','Próximos agendamentos',a.upcoming.length,'')}
+    ${statCard('c3','users','Clientes',DB.scope('customers',shop.id).length,'')}
+    ${statCard('c4','dollar','Receita de hoje',money(a.revToday),'apenas concluídos')}
   </div>
+  ${ownerFinanceStrip(shop)}
   <div class="dash-cols">
-    <div class="panel"><div class="panel-head"><h3>Today's Appointments</h3><button class="btn btn-ghost btn-sm" onclick="Router.go('#/dashboard/agenda')">Appointments</button></div>
-      ${todayList.length?todayList.map(apptMini).join(''):emptyState('calendar','No appointments today',"Share your booking link to fill today's agenda.",'Copy Link',`groomCopyUrl('${shop.slug}')`)}
+    <div class="panel"><div class="panel-head"><h3>Agendamentos de hoje</h3><button class="btn btn-ghost btn-sm" onclick="Router.go('#/dashboard/agenda')">Agendamentos</button></div>
+      ${todayList.length?todayList.map(apptMini).join(''):emptyState('calendar','Nenhum agendamento hoje','Compartilhe seu link para preencher a agenda de hoje.','Copiar link',`groomCopyUrl('${shop.slug}')`)}
     </div>
-    <div class="panel"><div class="panel-head"><h3>Upcoming Appointments</h3></div>
-      ${upcoming.length?upcoming.map(apptMini).join(''):emptyState('clock','No upcoming appointments','Future bookings appear here as clients reserve online.','Open Booking Page',`Router.go('#/${shop.slug}')`)}
+    <div class="panel"><div class="panel-head"><h3>Próximos agendamentos</h3></div>
+      ${upcoming.length?upcoming.map(apptMini).join(''):emptyState('clock','Nenhum agendamento futuro','As próximas reservas aparecem aqui quando clientes agendam online.','Abrir página',`Router.go('#/${shop.slug}')`)}
     </div>
   </div>`;
 }
+function ownerFinanceStrip(shop){
+  const t=DB.todayISO(),appts=DB.scope('appointments',shop.id).filter(a=>a.status==='concluido');
+  const rev=(list)=>list.reduce((s,a)=>s+(a.price||0),0);
+  const weekStart=DB.addDays(t,-6),month=t.slice(0,7);
+  const today=appts.filter(a=>a.date===t),week=appts.filter(a=>a.date>=weekStart&&a.date<=t),mon=appts.filter(a=>a.date.slice(0,7)===month);
+  return `<div class="panel" style="margin:14px 0"><div class="panel-head"><div><h3>${icon('dollar')} Financeiro simples</h3><div class="sub">Receita ganha com atendimentos concluídos</div></div></div>
+    <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin:0">
+      ${statCard('f1','calendar','Hoje',money(rev(today)),`${today.length} atendimento(s)`)}
+      ${statCard('f2','chart','Últimos 7 dias',money(rev(week)),`${week.length} atendimento(s)`)}
+      ${statCard('f3','dollar','Este mês',money(rev(mon)),`${mon.length} atendimento(s)`)}
+    </div></div>`;
+}
 function dashOverviewCharts(shop){
   const a=shopAnalytics(shop.id);
-  mkChart('dRev','line',{labels:a.days,datasets:[{data:a.revSeries,borderColor:GOLD,backgroundColor:'rgba(212,175,55,.14)',fill:true,tension:.4,borderWidth:3,pointRadius:4,pointBackgroundColor:GOLD}]},{plugins:{legend:{display:false}},scales:{y:{grid:{color:cssVar('--line')},ticks:{callback:v=>'R$'+v}},x:{grid:{display:false}}}});
+  mkChart('dRev','line',{labels:a.days,datasets:[{data:a.revSeries,borderColor:DASH_CHART_PRIMARY,backgroundColor:'rgba(124,58,237,.14)',fill:true,tension:.4,borderWidth:3,pointRadius:4,pointBackgroundColor:DASH_CHART_PRIMARY}]},{plugins:{legend:{display:false}},scales:{y:{grid:{color:cssVar('--line')},ticks:{callback:v=>'R$'+v}},x:{grid:{display:false}}}});
   const sd=a.byStatus;mkChart('dStatus','doughnut',{labels:['Confirmado','Pendente','Concluído','Cancelado'],datasets:[{data:[sd.confirmado,sd.pendente,sd.concluido,sd.cancelado],backgroundColor:[GREEN,AMBER,BRONZE,RED],borderWidth:0}]},{cutout:'64%',plugins:{legend:{position:'bottom',labels:{padding:12,usePointStyle:true}}}});
 }
 
@@ -155,14 +214,16 @@ function dashAgenda(shop){
       const evs=dayAppts.filter(a=>a.barberId===b.id).sort((x,y)=>x.time.localeCompare(y.time));
       const bls=blocks.filter(x=>x.barberId===b.id);
       return `<div class="panel" style="margin:0"><div class="panel-head" style="margin-bottom:12px"><div class="t-user"><div class="av">${initials(b.name)}</div><div><b>${escapeHtml(b.name.split(' ')[0])}</b><small>${b.start}–${b.end}</small></div></div></div>
-        ${bls.map(x=>`<div class="cal-event blocked"><b>${x.fullDay?'Dia bloqueado':x.start+'–'+x.end}</b><small>${escapeHtml(x.reason||'Bloqueio')}</small></div>`).join('')}
+        ${bls.map(x=>`<div class="cal-event blocked"><div><b>${x.fullDay?'Dia bloqueado':x.start+'–'+x.end}</b><small>${escapeHtml(x.reason||'Bloqueio')}</small></div>${canManage?`<button class="ra del" title="Desbloquear" onclick="event.stopPropagation();removeBlock('${x.id}')">${icon('unlock')}</button>`:''}</div>`).join('')}
         ${evs.length?evs.map(ap=>{const s=DB.find('services',ap.serviceId);return `<div class="cal-event s-${ap.status}" onclick="apptForm('${ap.id}')"><b>${ap.time} · ${s?escapeHtml(s.name):''}</b><small>${escapeHtml(ap.customerName)}</small></div>`;}).join(''):(bls.length?'':`<p class="muted" style="font-size:13px;text-align:center;padding:14px 0">Livre</p>`)}
       </div>`;}).join('')||emptyState('users','Sem profissionais','Cadastre profissionais para ver a agenda.','Adicionar profissional','barberForm()')}</div>`;
   }
-  return `<div class="page-head"><div><h2>Agenda</h2><p>${dayAppts.filter(a=>a.status!=='cancelado').length} agendamento(s) em ${fmtDate(agendaDate)}</p></div>
+  return `<div class="page-head"><div><h2>Agenda</h2><p>${shop.schedulePaused?'Agenda pausada · ':''}${dayAppts.filter(a=>a.status!=='cancelado').length} agendamento(s) em ${fmtDate(agendaDate)}</p></div>
     <div class="page-actions">
       ${canManage?`<button class="btn btn-ghost" onclick="blockForm()">${icon('lock')} Bloquear</button>`:''}
+      ${canManage?`<button class="btn btn-ghost" onclick="Router.go('#/dashboard/config')">${icon('settings')} Horários</button>`:''}
       ${canManage?`<button class="btn btn-primary" onclick="apptForm()">${icon('plus')} Novo agendamento</button>`:''}
+      ${canManage?`<button class="btn ${shop.schedulePaused?'btn-primary':'btn-ghost'}" onclick="toggleSchedulePause()">${icon(shop.schedulePaused?'play':'clock')} ${shop.schedulePaused?'Retomar agenda':'Pausar agenda'}</button>`:''}
     </div></div>
   <div class="toolbar">
     <div class="seg"><button class="${agendaView==='dia'?'on':''}" onclick="agendaView='dia';refreshShell()">Dia</button><button class="${agendaView==='lista'?'on':''}" onclick="agendaView='lista';agendaPage=1;refreshShell()">Lista</button></div>
@@ -177,15 +238,22 @@ function apptRow(ap){
   return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name):'—'}</td><td>${fmtDate(ap.date)}</td><td>${ap.time}</td><td>${money(ap.price)}${consumed}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td><td><div class="row-actions">${consumeBtn}${canManage&&ap.status!=='concluido'&&ap.status!=='cancelado'?`<button class="ra" title="Concluir" onclick="apptStatus('${ap.id}','concluido')">${icon('check')}</button>`:''}${canManage?`<button class="ra" title="Editar" onclick="apptForm('${ap.id}')">${icon('edit')}</button>`:''}${canManage&&ap.status!=='cancelado'?`<button class="ra del" title="Cancelar" onclick="apptStatus('${ap.id}','cancelado')">${icon('x')}</button>`:''}</div></td></tr>`;
 }
 function apptStatus(id,status){DB.update('appointments',id,{status});const ap=DB.find('appointments',id);if(status==='cancelado')DB.insert('notifications',{barbershopId:ap.barbershopId,type:'cancel',title:'Cancelamento',msg:`${ap.customerName} — ${fmtDateShort(ap.date)} ${ap.time}`,time:Date.now(),read:false});DB.log(status==='cancelado'?'Agendamento cancelado':'Agendamento concluído',ap.customerName,ap.barbershopId);toast('Status atualizado.',status==='cancelado'?'info':'ok');refreshShell();}
+async function toggleSchedulePause(){
+  const shop=dashShop(),paused=!shop.schedulePaused;
+  const patch={schedulePaused:paused,schedulePausedAt:paused?Date.now():0};
+  if(window.__FB_ENABLED&&window.fbSaveTenantProfile){try{await fbSaveTenantProfile(shop.id,patch);}catch(e){toast(saveTenantMsg(e),'err');return;}}
+  DB.update('barbershops',shop.id,patch);DB.log(paused?'Agenda pausada':'Agenda retomada',shop.name,shop.id);toast(paused?'Agenda pausada para novos clientes.':'Agenda retomada.','ok');refreshShell();
+}
 function apptForm(id){
   const shop=dashShop();const ap=id?DB.find('appointments',id):null;
-  const svcs=DB.scope('services',shop.id),barbers=DB.scope('barbers',shop.id);
+  const svcs=DB.scope('services',shop.id),barbers=DB.scope('barbers',shop.id).filter(b=>b.active);
   const apSvcName=ap?(DB.find('services',ap.serviceId)||{}).name||'':'';
   const apBarberName=ap?(DB.find('barbers',ap.barberId)||{}).name||'':'';
   const waPhone=ap&&ap.phone?ap.phone.replace(/\D/g,''):'';
   const waMsg=ap&&waPhone?encodeURIComponent(`Olá, ${ap.customerName}! Lembrando do seu agendamento na ${shop.name}: ${apSvcName} com ${apBarberName} em ${fmtDate(ap.date)} às ${ap.time}. Qualquer dúvida é só chamar! 💈`):'';
   const waBtn=ap&&waPhone?`<a class="btn btn-ghost btn-sm" href="https://wa.me/55${waPhone}?text=${waMsg}" target="_blank" rel="noopener" style="margin-right:auto">${icon('whatsapp')} Lembrete WhatsApp</a>`:'';
-  openModal(`<div class="modal-head"><div><h3>${ap?'Editar':'Novo'} agendamento</h3></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  const cancelBtn=ap&&ap.status!=='cancelado'?`<button class="btn btn-ghost" style="color:var(--danger)" onclick="apptStatus('${ap.id}','cancelado');closeModal()">${icon('x')} Cancelar agendamento</button>`:'';
+  openModal(`<div class="modal-head"><div><h3>${ap?'Remarcar / editar':'Novo'} agendamento</h3></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
     <div class="field"><label>Cliente *</label><input class="input" id="ap_name" value="${ap?escapeHtml(ap.customerName):''}" placeholder="Nome"><div class="err">Informe o cliente.</div></div>
     <div class="field"><label>WhatsApp *</label><input class="input" id="ap_phone" value="${ap?escapeHtml(ap.phone):''}" placeholder="(11) 90000-0000"><div class="err">Informe o telefone.</div></div>
@@ -199,7 +267,7 @@ function apptForm(id){
     </div>
     <div class="field"><label>Status</label><select class="input" id="ap_status">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${ap?(ap.status===k?'selected':''):(k==='confirmado'?'selected':'')}>${v.label}</option>`).join('')}</select></div>
   </div>
-  <div class="modal-foot">${waBtn}<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveAppt('${id||''}')">Salvar</button></div>`);
+  <div class="modal-foot">${waBtn}${cancelBtn}<button class="btn btn-ghost" onclick="closeModal()">Fechar</button><button class="btn btn-primary" onclick="saveAppt('${id||''}')">Salvar</button></div>`);
 }
 function saveAppt(id){
   const shop=dashShop();const name=$('#ap_name').value.trim(),phone=$('#ap_phone').value.trim();
@@ -207,10 +275,11 @@ function saveAppt(id){
   const svcId=$('#ap_svc').value,svc=DB.find('services',svcId);const barberId=$('#ap_barber').value;const date=$('#ap_date').value,time=$('#ap_time').value,status=$('#ap_status').value;
   if(!id||status!=='cancelado'){
     const slot=barberSlots(shop.id,barberId,date,svc.duration).find(s=>s.time===time);
-    const conflict=DB.scope('appointments',shop.id).some(a=>a.id!==id&&a.barberId===barberId&&a.date===date&&a.time===time&&a.status!=='cancelado');
-    if(conflict){toast('Já existe agendamento neste horário para o profissional.','err');return;}
+    const s0=timeToMin(time),e0=s0+(svc.duration||30);
+    const conflict=DB.scope('appointments',shop.id).some(a=>{if(a.id===id||a.barberId!==barberId||a.date!==date||a.status==='cancelado')return false;const svcA=DB.find('services',a.serviceId);const a0=timeToMin(a.time),a1=a0+(a.duration||(svcA?svcA.duration:30));return s0<a1&&e0>a0;});
+    if(conflict||!slot||!slot.available){toast('Este período conflita com outro agendamento ou bloqueio.','err');return;}
   }
-  const data={customerName:name,phone,serviceId:svcId,barberId,date,time,status,price:svc.price};
+  const data={customerName:name,phone,serviceId:svcId,barberId,date,time,duration:svc.duration,status,price:svc.price};
   if(id){DB.update('appointments',id,data);DB.log('Agendamento editado',name,shop.id);toast('Agendamento atualizado.','ok');}
   else{let cust=DB.scope('customers',shop.id).find(c=>c.phone===phone);if(!cust)cust=DB.insert('customers',{barbershopId:shop.id,name,phone,whatsapp:phone,email:'',birthday:'',notes:''});data.barbershopId=shop.id;data.customerId=cust.id;data.createdAt=Date.now();DB.insert('appointments',data);DB.log('Agendamento criado',name,shop.id);toast('Agendamento criado.','ok');}
   closeModal();refreshShell();
@@ -219,7 +288,7 @@ function blockForm(){
   const shop=dashShop();const barbers=DB.scope('barbers',shop.id).filter(b=>b.active);
   openModal(`<div class="modal-head"><div><h3>Bloquear horário</h3><div class="sub">Indisponibilize um período ou dia inteiro</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
-    <div class="field"><label>Profissional</label><select class="input" id="bl_barber">${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Profissional</label><select class="input" id="bl_barber"><option value="all">Todos os profissionais</option>${barbers.map(b=>`<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')}</select></div>
     <div class="field"><label>Data</label><input class="input" type="date" id="bl_date" value="${agendaDate||DB.todayISO()}" min="${DB.todayISO()}"></div>
     <div class="checkbox-row"><div class="switch" id="bl_full" onclick="this.classList.toggle('on');$('#bl_times').style.display=this.classList.contains('on')?'none':'grid'"></div><label style="margin:0">Bloquear o dia inteiro</label></div>
     <div class="form-row" id="bl_times"><div class="field"><label>Início</label><input class="input" type="time" id="bl_start" value="12:00"></div><div class="field"><label>Fim</label><input class="input" type="time" id="bl_end" value="13:00"></div></div>
@@ -227,7 +296,8 @@ function blockForm(){
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveBlock()">Bloquear</button></div>`);
 }
-function saveBlock(){const shop=dashShop();const full=$('#bl_full').classList.contains('on');DB.insert('blocks',{barbershopId:shop.id,barberId:$('#bl_barber').value,date:$('#bl_date').value,start:$('#bl_start').value,end:$('#bl_end').value,reason:$('#bl_reason').value.trim(),fullDay:full});DB.log('Horário bloqueado',$('#bl_date').value,shop.id);closeModal();toast('Bloqueio criado.','ok');refreshShell();}
+function saveBlock(){const shop=dashShop();const full=$('#bl_full').classList.contains('on'),start=$('#bl_start').value,end=$('#bl_end').value;if(!full&&timeToMin(start)>=timeToMin(end)){toast('O fim precisa ser depois do início.','err');return;}DB.insert('blocks',{barbershopId:shop.id,barberId:$('#bl_barber').value,date:$('#bl_date').value,start,end,reason:$('#bl_reason').value.trim(),fullDay:full});DB.log('Horário bloqueado',$('#bl_date').value,shop.id);closeModal();toast('Bloqueio criado.','ok');refreshShell();}
+function removeBlock(id){const b=DB.find('blocks',id);if(!b)return;confirmAction('Desbloquear horário?','Esse período voltará a aceitar agendamentos se houver profissional e horário disponível.',()=>{DB.remove('blocks',id);DB.log('Horário desbloqueado',b.date,b.barbershopId);toast('Bloqueio removido.','ok');refreshShell();});}
 
 /* ---------- CRM ---------- */
 function customerStats(shopId,custId){
@@ -273,7 +343,7 @@ function dashCRM(shop){
   const list=crmSeg==='todos'?customers:customers.filter(c=>c.st.seg===crmSeg);
   const pg=pageSlice(list,crmPage);crmPage=pg.page;
   const segCard=(k,label,ic,color)=>`<div class="seg-card ${crmSeg===k?'sel':''}" onclick="crmSeg='${k}';crmPage=1;refreshShell()"><div class="sc-ic si ${color}">${icon(ic)}</div><b>${counts[k]}</b><span>${label}</span></div>`;
-  return `<div class="page-head"><div><h2>Clientes (CRM)</h2><p>Inteligência de relacionamento e fidelização</p></div><div class="page-actions">${can('manage_marketing')?`<button class="btn btn-ghost" onclick="sendSegmentCampaign('${crmSeg}')">${icon('megaphone')} Campanha p/ segmento</button>`:''}<button class="btn btn-primary" onclick="customerForm()">${icon('plus')} Novo cliente</button></div></div>
+  return `<div class="page-head"><div><h2>Clientes (CRM)</h2><p>Inteligência de relacionamento e fidelização</p></div><div class="page-actions"><button class="btn btn-primary" onclick="customerForm()">${icon('plus')} Novo cliente</button></div></div>
   <div class="seg-grid">${segCard('todos','Todos','users','c1')}${segCard('vip','VIP','award','c4')}${segCard('frequente','Frequentes','heart','c2')}${segCard('inativo','Inativos','clock','c5')}${segCard('novo','Novos','sparkle','c3')}</div>
   ${list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Segmento</th><th>Visitas</th><th>Total gasto</th><th>Última visita</th><th>Favorito</th><th></th></tr></thead><tbody>
   ${pg.items.map(c=>{const segB={vip:['gold','VIP'],frequente:['ok','Frequente'],inativo:['danger','Inativo'],novo:['info','Novo'],todos:['muted','-']}[c.st.seg];return `<tr>
@@ -311,33 +381,32 @@ function customerForm(id){
 }
 function saveCustomer(id){const shop=dashShop();const name=$('#cu_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const data={name,phone:$('#cu_phone').value.trim(),whatsapp:$('#cu_wa').value.trim(),email:$('#cu_email').value.trim(),birthday:$('#cu_bday').value,notes:$('#cu_notes').value.trim()};if(id)DB.update('customers',id,data);else DB.insert('customers',{barbershopId:shop.id,...data});DB.log(id?'Cliente editado':'Cliente criado',name,shop.id);closeModal();toast('Cliente salvo.','ok');refreshShell();}
 function delCustomer(id){confirmAction('Excluir cliente?','O histórico de agendamentos será mantido.',()=>{DB.remove('customers',id);toast('Cliente excluído.','info');refreshShell();});}
-function sendSegmentCampaign(seg){const shop=dashShop();const customers=DB.scope('customers',shop.id).filter(c=>seg==='todos'||customerStats(shop.id,c.id).seg===seg);toast(`Campanha enviada para ${customers.length} cliente(s) via WhatsApp/e-mail.`,'ok');DB.log('Campanha enviada','Segmento: '+seg,shop.id);}
 
 /* ---------- Barbers ---------- */
 function dashBarbers(shop){
   const list=DB.scope('barbers',shop.id);
   const active=list.filter(b=>b.active).length;
   const e=shopEntitlements(shop.id);const lim=e.limitBarbers>=999?'∞':e.limitBarbers;
-  return `<div class="page-head"><div><h2>Barbeiros</h2><p>${active}/${lim} ativo(s) · plano ${escapeHtml(e.planName)}${active>=e.limitBarbers&&e.limitBarbers<999?' · <span style="color:var(--warn)">limite atingido</span>':''}</p></div><div class="page-actions"><button class="btn btn-primary" onclick="barberForm()">${icon('plus')} Novo barbeiro</button></div></div>
-  <div class="barber-grid">${list.map(b=>{const st=DB.scope('appointments',shop.id).filter(a=>a.barberId===b.id&&a.status==='concluido');const rev=st.reduce((s,a)=>s+a.price,0);return `<div class="barber-card" style="${b.active?'':'opacity:.66'}"><div class="ph">${imageOrInitials(b.photoUrl,b.name,'barber-photo')}<span class="badge ${b.active?'ok':'muted'}" style="position:absolute;top:12px;right:12px">${b.active?'Ativo':'Inativo'}</span>${b.isOwner?`<span class="badge gold" style="position:absolute;top:12px;left:12px">${icon('award')} Dono</span>`:''}</div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div><div class="summary-line" style="margin-top:10px"><span class="muted">Comissão serv./prod.</span><b>${b.commission||0}% / ${b.productCommission??10}%</b></div><div class="summary-line"><span class="muted">Faturou</span><b>${money(rev)}</b></div><div class="summary-line"><span class="muted">Expediente</span><b>${b.start}–${b.end}</b></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" style="flex:1" onclick="barberForm('${b.id}')">${icon('edit')} Editar</button><button class="btn btn-sm ${b.active?'btn-ghost':'btn-primary'}" onclick="toggleBarberActive('${b.id}')">${b.active?'Inativar':'Ativar'}</button>${b.isOwner?'':`<button class="ra del" title="Excluir" onclick="delBarber('${b.id}')">${icon('trash')}</button>`}</div></div></div>`;}).join('')||emptyState('scissors','Sem profissionais','Cadastre o primeiro profissional para liberar horários online.','Adicionar profissional','barberForm()')}</div>`;
+  return `<div class="page-head"><div><h2>Colaboradores</h2><p>${active}/${lim} ativo(s) · plano ${escapeHtml(e.planName)}${active>=e.limitBarbers&&e.limitBarbers<999?' · <span style="color:var(--warn)">limite atingido</span>':''}</p></div><div class="page-actions"><button class="btn btn-primary" onclick="barberForm()">${icon('plus')} Novo colaborador</button></div></div>
+  <div class="barber-grid">${list.map(b=>{const st=DB.scope('appointments',shop.id).filter(a=>a.barberId===b.id&&a.status==='concluido');const rev=st.reduce((s,a)=>s+a.price,0);return `<div class="barber-card" style="${b.active?'':'opacity:.66'}"><div class="ph">${imageOrInitials(b.photoUrl,b.name,'barber-photo')}<span class="badge ${b.active?'ok':'muted'}" style="position:absolute;top:12px;right:12px">${b.active?'Ativo':'Inativo'}</span>${b.isOwner?`<span class="badge gold" style="position:absolute;top:12px;left:12px">${icon('award')} Dono</span>`:''}</div><div class="bbody"><h3>${escapeHtml(b.name)}</h3><div class="role">${escapeHtml(b.role)} · ${b.rating}★</div><div class="spec">${b.specialties.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div><div class="summary-line" style="margin-top:10px"><span class="muted">Comissão serv./prod.</span><b>${b.commission||0}% / ${b.productCommission??10}%</b></div><div class="summary-line"><span class="muted">Faturou</span><b>${money(rev)}</b></div><div class="summary-line"><span class="muted">Expediente</span><b>${b.start}–${b.end}</b></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" style="flex:1" onclick="barberForm('${b.id}')">${icon('edit')} Editar</button><button class="btn btn-sm ${b.active?'btn-ghost':'btn-primary'}" onclick="toggleBarberActive('${b.id}')">${b.active?'Inativar':'Ativar'}</button>${b.isOwner?'':`<button class="ra del" title="Excluir" onclick="delBarber('${b.id}')">${icon('trash')}</button>`}</div></div></div>`;}).join('')||emptyState('users','Sem colaboradores','Cadastre o primeiro colaborador para liberar horários online.','Adicionar colaborador','barberForm()')}</div>`;
 }
 function toggleBarberActive(id){
   const shop=dashShop();const b=DB.find('barbers',id);
-  if(!b||b.barbershopId!==shop.id){toast('Barbeiro inválido.','err');return;} // tenant guard
+  if(!b||b.barbershopId!==shop.id){toast('Colaborador inválido.','err');return;} // tenant guard
   const turningOff=b.active;
   if(!turningOff){const e=shopEntitlements(shop.id);const active=DB.scope('barbers',shop.id).filter(x=>x.active).length;if(active>=e.limitBarbers){toast(`Seu plano (${e.planName}) permite ${e.limitBarbers} profissional(is) ativo(s). Faça upgrade para ativar mais.`,'err');return;}}
   const future=DB.scope('appointments',shop.id).filter(a=>a.barberId===id&&a.date>=DB.todayISO()&&(a.status==='confirmado'||a.status==='pendente')).length;
-  const apply=()=>{DB.update('barbers',id,{active:!b.active});DB.log(turningOff?'Barbeiro inativado':'Barbeiro ativado',b.name,shop.id);toast(turningOff?`${b.name.split(' ')[0]} inativado — não aparece mais na agenda.`:`${b.name.split(' ')[0]} ativado.`,turningOff?'info':'ok');refreshShell();};
-  if(turningOff&&future>0)confirmAction('Inativar barbeiro?',`${b.name} tem ${future} agendamento(s) futuro(s). Ele deixará de aparecer para novos agendamentos, mas os já marcados continuam na agenda. Deseja continuar?`,apply,false);
+  const apply=()=>{DB.update('barbers',id,{active:!b.active});DB.log(turningOff?'Colaborador inativado':'Colaborador ativado',b.name,shop.id);toast(turningOff?`${b.name.split(' ')[0]} inativado — não aparece mais na agenda.`:`${b.name.split(' ')[0]} ativado.`,turningOff?'info':'ok');refreshShell();};
+  if(turningOff&&future>0)confirmAction('Inativar colaborador?',`${b.name} tem ${future} agendamento(s) futuro(s). Ele deixará de aparecer para novos agendamentos, mas os já marcados continuam na agenda. Deseja continuar?`,apply,false);
   else apply();
 }
 function barberForm(id){
-  const shop=dashShop();const b=id?DB.find('barbers',id):null;const days=b?b.days:[1,2,3,4,5,6];
-  openModal(`<div class="modal-head"><h3>${b?'Editar':'Novo'} barbeiro</h3><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  const shop=dashShop();const b=id?DB.find('barbers',id):null;const days=b?b.days:[1,2,3,4,5,6];const defaultRole=defaultRoleFor(shop);
+  openModal(`<div class="modal-head"><h3>${b?'Editar':'Novo'} colaborador</h3><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
-    <div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="ba_name" value="${b?escapeHtml(b.name):''}"></div><div class="field"><label>Cargo</label><input class="input" id="ba_role" value="${b?escapeHtml(b.role):'Barbeiro'}"></div></div>
+    <div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="ba_name" value="${b?escapeHtml(b.name):''}"></div><div class="field"><label>Função</label><input class="input" id="ba_role" value="${b?escapeHtml(b.role):escapeHtml(defaultRole)}"></div></div>
     <div class="form-row"><div class="field"><label>Telefone</label><input class="input" id="ba_phone" value="${b?escapeHtml(b.phone||''):''}"></div><div class="field"><label>E-mail</label><input class="input" id="ba_email" value="${b?escapeHtml(b.email||''):''}"></div></div>
-    <div class="field"><label>Foto do barbeiro</label>
+    <div class="field"><label>Foto do colaborador</label>
       <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
         <div id="ba_photo_preview" style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;color:var(--primary);flex-shrink:0">
           ${b&&b.photoUrl?`<img src="${escapeHtml(b.photoUrl)}" alt="${escapeHtml(b.name)}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`:`<span>${initials(b?b.name:'')}</span>`}
@@ -368,13 +437,13 @@ function clearShopLogo(){const rem=$('#cf_logo_remove');if(rem)rem.value='1';con
 function clearShopCover(){const rem=$('#cf_cover_remove');if(rem)rem.value='1';const fi=$('#cf_cover_file');if(fi)fi.value='';const p=$('#cf_cover_preview');if(p)p.innerHTML='<span class="muted" style="font-size:11px">Sem capa</span>';$$('.remove-cover-btn').forEach(b=>b.style.display='none');}
 function previewBarberPhoto(input){const file=input.files[0];if(!file)return;const rem=$('#ba_photo_remove');if(rem)rem.value='0';const reader=new FileReader();reader.onload=e=>{const p=$('#ba_photo_preview');if(!p)return;p.innerHTML=`<img src="${e.target.result}" alt="Preview" style="width:100%;height:100%;object-fit:cover">`;};reader.readAsDataURL(file);}
 function clearBarberPhoto(){const rem=$('#ba_photo_remove');if(rem)rem.value='1';const fi=$('#ba_photo_file');if(fi)fi.value='';const p=$('#ba_photo_preview');if(p){const n=$('#ba_name');p.innerHTML=`<span>${initials(n?n.value:'?')}</span>`;}$$('.remove-photo-btn').forEach(b=>b.style.display='none');}
-async function saveBarber(id){const shop=dashShop();const name=$('#ba_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const days=$$('#ba_days .chip-toggle.on').map(e=>+e.dataset.day);const vs=$('#ba_vs').value,ve=$('#ba_ve').value;const old=id?DB.find('barbers',id):null;const data={name,role:$('#ba_role').value.trim()||'Barbeiro',phone:$('#ba_phone').value.trim(),email:$('#ba_email').value.trim(),bio:$('#ba_bio').value.trim(),specialties:$('#ba_spec').value.split(',').map(s=>s.trim()).filter(Boolean),commission:+$('#ba_comm').value||0,productCommission:+$('#ba_pcomm').value||0,start:$('#ba_start').value,end:$('#ba_end').value,lunchStart:$('#ba_ls').value,lunchEnd:$('#ba_le').value,days,vacations:vs&&ve?[{start:vs,end:ve}]:[],active:$('#ba_active').classList.contains('on')};
+async function saveBarber(id){const shop=dashShop();const name=$('#ba_name').value.trim();if(name.length<2){toast('Informe o nome.','err');return;}const days=$$('#ba_days .chip-toggle.on').map(e=>+e.dataset.day);const vs=$('#ba_vs').value,ve=$('#ba_ve').value;const old=id?DB.find('barbers',id):null;const data={name,role:$('#ba_role').value.trim()||defaultRoleFor(shop),phone:$('#ba_phone').value.trim(),email:$('#ba_email').value.trim(),bio:$('#ba_bio').value.trim(),specialties:$('#ba_spec').value.split(',').map(s=>s.trim()).filter(Boolean),commission:+$('#ba_comm').value||0,productCommission:+$('#ba_pcomm').value||0,start:$('#ba_start').value,end:$('#ba_end').value,lunchStart:$('#ba_ls').value,lunchEnd:$('#ba_le').value,days,vacations:vs&&ve?[{start:vs,end:ve}]:[],active:$('#ba_active').classList.contains('on')};
   const shouldRemove=$('#ba_photo_remove')&&$('#ba_photo_remove').value==='1';
   if(shouldRemove){if(old&&old.photoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(old.photoPath).catch(()=>{});data.photoUrl='';data.photoPath='';}
   else{const file=$('#ba_photo_file')&&$('#ba_photo_file').files[0];if(file&&window.fbUploadTenantImage){try{toast('Enviando foto...','info');const up=await fbUploadTenantImage(shop.id,'barbers',file,old&&old.photoPath);data.photoUrl=up.url;data.photoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar a foto.','err');return;}}}
   if(!id&&data.active){const e=shopEntitlements(shop.id);const active=DB.scope('barbers',shop.id).filter(x=>x.active).length;if(active>=e.limitBarbers){toast(`Seu plano (${e.planName}) permite ${e.limitBarbers} profissional(is) ativo(s). Faça upgrade ou cadastre como inativo.`,'err');return;}}
-  if(id)DB.update('barbers',id,data);else DB.insert('barbers',{barbershopId:shop.id,rating:5,...data});DB.log(id?'Barbeiro editado':'Barbeiro criado',name,shop.id);closeModal();toast('Barbeiro salvo.','ok');refreshShell();}
-function delBarber(id){confirmAction('Excluir barbeiro?','Esta ação não pode ser desfeita.',()=>{const b=DB.find('barbers',id);DB.remove('barbers',id);if(b&&b.photoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(b.photoPath).catch(()=>{});toast('Barbeiro excluído.','info');refreshShell();});}
+  if(id)DB.update('barbers',id,data);else DB.insert('barbers',{barbershopId:shop.id,rating:5,...data});DB.log(id?'Colaborador editado':'Colaborador criado',name,shop.id);closeModal();toast('Colaborador salvo.','ok');refreshShell();}
+function delBarber(id){confirmAction('Excluir colaborador?','Esta ação não pode ser desfeita.',()=>{const b=DB.find('barbers',id);DB.remove('barbers',id);if(b&&b.photoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(b.photoPath).catch(()=>{});toast('Colaborador excluído.','info');refreshShell();});}
 
 /* ---------- Services ---------- */
 function dashServices(shop){
@@ -385,7 +454,7 @@ function dashServices(shop){
   </tbody></table></div>`;
 }
 function serviceForm(id){
-  const shop=dashShop();const s=id?DB.find('services',id):null;const cats=['Cabelo','Barba','Combo','Estética','Tratamento'];const icons=['scissors','user','star','eye','droplet','zap','sparkle'];
+  const shop=dashShop();const s=id?DB.find('services',id):null;const cats=serviceCategoriesFor(shop).slice();if(s&&s.category&&!cats.includes(s.category))cats.unshift(s.category);const icons=['scissors','user','star','eye','droplet','zap','sparkle','activity','heart','camera','briefcase','shield'];
   openModal(`<div class="modal-head"><h3>${s?'Editar':'Novo'} serviço</h3><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body">
     <div class="field"><label>Nome *</label><input class="input" id="sv_name" value="${s?escapeHtml(s.name):''}"><div class="err">Informe o nome.</div></div>
@@ -536,9 +605,9 @@ function dashFinance(shop){
   const t=DB.todayISO();const appts=DB.scope('appointments',shop.id);
   const inRange=a=>{if(finPeriod==='dia')return a.date===t;if(finPeriod==='semana')return a.date>=DB.addDays(t,-6)&&a.date<=t;if(finPeriod==='mes')return a.date.slice(0,7)===t.slice(0,7);return a.date.slice(0,4)===t.slice(0,4);};
   const range=appts.filter(inRange);
-  const paid=range.filter(a=>a.status==='concluido'||a.status==='confirmado');
+  const paid=range.filter(a=>a.status==='concluido');
   const revenue=paid.reduce((s,a)=>s+a.price,0);
-  let commissions=0;range.filter(a=>a.status==='concluido').forEach(a=>{const b=DB.find('barbers',a.barberId);if(b)commissions+=a.price*(b.commission/100);});
+  let commissions=0;paid.forEach(a=>{const b=DB.find('barbers',a.barberId);if(b)commissions+=a.price*(b.commission/100);});
   const expenses=commissions; // comissões como principal despesa variável
   const profit=revenue-expenses;
   const ticket=paid.length?revenue/paid.length:0;
@@ -551,13 +620,13 @@ function dashFinance(shop){
   </div>
   <div class="dash-cols">
     <div class="panel"><div class="panel-head"><h3>Evolução (7 dias)</h3></div><div class="chart-wrap"><canvas id="finChart"></canvas></div></div>
-    <div class="panel"><div class="panel-head"><h3>Comissões por barbeiro</h3></div>
+    <div class="panel"><div class="panel-head"><h3>Comissões por colaborador</h3></div>
       ${DB.scope('barbers',shop.id).map(b=>{const list=range.filter(a=>a.barberId===b.id&&a.status==='concluido');const rev=list.reduce((s,a)=>s+a.price,0);const comm=rev*(b.commission/100);return `<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${initials(b.name)}</span><div><b>${escapeHtml(b.name.split(' ')[0])}</b><br><small>${list.length} atend. · ${b.commission}%</small></div><b style="margin-left:auto">${money(comm)}</b></div>`;}).join('')||'<p class="muted">Sem dados.</p>'}
     </div>
   </div>`;
 }
-function dashFinanceChart(shop){const a=shopAnalytics(shop.id);mkChart('finChart','bar',{labels:a.days,datasets:[{data:a.revSeries,backgroundColor:GOLD,borderRadius:8}]},{plugins:{legend:{display:false}},scales:{y:{grid:{color:cssVar('--line')},ticks:{callback:v=>'R$'+v}},x:{grid:{display:false}}}});}
-function exportFinance(){const shop=dashShop();const rows=[['Data','Cliente','Servico','Barbeiro','Valor','Status']];DB.scope('appointments',shop.id).forEach(a=>{const s=DB.find('services',a.serviceId),b=DB.find('barbers',a.barberId);rows.push([a.date,a.customerName,s?s.name:'',b?b.name:'',a.price,a.status]);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='financeiro-'+shop.slug+'.csv';a.click();toast('Relatório exportado.','ok');}
+function dashFinanceChart(shop){const a=shopAnalytics(shop.id);mkChart('finChart','bar',{labels:a.days,datasets:[{data:a.revSeries,backgroundColor:DASH_CHART_PRIMARY,borderRadius:8}]},{plugins:{legend:{display:false}},scales:{y:{grid:{color:cssVar('--line')},ticks:{callback:v=>'R$'+v}},x:{grid:{display:false}}}});}
+function exportFinance(){const shop=dashShop();const rows=[['Data','Cliente','Servico','Colaborador','Valor','Status']];DB.scope('appointments',shop.id).forEach(a=>{const s=DB.find('services',a.serviceId),b=DB.find('barbers',a.barberId);rows.push([a.date,a.customerName,s?s.name:'',b?b.name:'',a.price,a.status]);});const csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='financeiro-'+shop.slug+'.csv';a.click();toast('Relatório exportado.','ok');}
 
 /* ---------- AI Insights ---------- */
 function businessSnapshot(shop){
@@ -618,11 +687,33 @@ async function generateGroqInsights(){
 }
 
 /* ---------- Config ---------- */
+function configDayHours(shop){
+  const src=shop&&shop.dayHours||{};
+  const fallback=Array.isArray(shop&&shop.workDays)?shop.workDays:[1,2,3,4,5,6];
+  const out={};
+  DOW.forEach((_,i)=>{
+    const cfg=src[String(i)]||src[i]||{};
+    out[i]={active:typeof cfg.active!=='undefined'?!!cfg.active:fallback.includes(i),start:cfg.start||shop.open||'09:00',end:cfg.end||shop.close||'19:00'};
+  });
+  return out;
+}
+function configDayHourRows(shop){
+  const hours=configDayHours(shop);
+  return DOW.map((d,i)=>{
+    const h=hours[i];
+    return `<div class="schedule-day-row" data-day="${i}">
+      <div class="checkbox-row"><div class="switch ${h.active?'on':''}" id="cf_day_active_${i}" onclick="this.classList.toggle('on')"></div><label style="margin:0">${d}</label></div>
+      <div class="field"><label>Início</label><input class="input" type="time" id="cf_day_start_${i}" value="${h.start}"></div>
+      <div class="field"><label>Fim</label><input class="input" type="time" id="cf_day_end_${i}" value="${h.end}"></div>
+    </div>`;
+  }).join('');
+}
 function dashConfig(shop){
   const e=shopEntitlements(shop.id);
+  const u=Session.effectiveUser||{};
   const activeBarbers=DB.scope('barbers',shop.id).filter(b=>b.active).length;
   const featBadge=(on,label)=>`<span class="badge ${on?'ok':'muted'}">${on?icon('check'):icon('x')} ${label}</span>`;
-  return `<div class="page-head"><div><h2>Configurações</h2><p>Dados da barbearia e da página pública</p></div></div>
+  return `<div class="page-head"><div><h2>Configurações</h2><p>Dados do negócio e da página pública</p></div></div>
   ${bookingUrlCard(shop)}
   <div class="panel" style="${e.isEnterprise?'border-color:var(--primary)':''}"><div class="panel-head"><h3>${e.isEnterprise?icon('building')+' ':''}Seu plano: ${escapeHtml(e.planName)}</h3>${e.isEnterprise?'<span class="badge gold">Sob medida</span>':`<button class="btn btn-ghost btn-sm" onclick="Router.go('#/dashboard/assinatura')">${icon('creditCard')} Gerenciar assinatura</button>`}</div>
     <div class="form-row three">
@@ -633,9 +724,16 @@ function dashConfig(shop){
     <div class="chips" style="margin-top:10px">${ENT_FEATURES.map(f=>featBadge(e[f[0]],f[1])).join('')}</div>
     ${e.isEnterprise?'<p class="muted" style="font-size:12.5px;margin-top:12px">Plano personalizado pela equipe Groomin. Para ajustes, fale com o seu contato comercial.</p>':''}
   </div>
+  <div class="panel"><div class="panel-head"><h3>Dados cadastrais</h3></div>
+    <div class="form-row"><div class="field"><label>Seu nome</label><input class="input" id="cf_owner_name" value="${escapeHtml(u.name||shop.ownerName||'')}"></div><div class="field"><label>E-mail de login</label><div style="display:flex;gap:8px"><input class="input" id="cf_owner_email" value="${escapeHtml(u.email||shop.email||'')}" readonly><button class="btn btn-ghost btn-sm" type="button" onclick="openOwnerEmailModal()">${icon('mail')} Trocar</button></div></div></div>
+    <div class="form-row"><div class="field"><label>Telefone</label><input class="input" id="cf_owner_phone" value="${escapeHtml(u.phone||shop.phone||'')}"></div><div class="field"><label>WhatsApp</label><input class="input" id="cf_owner_wa" value="${escapeHtml(u.whatsapp||shop.whatsapp||'')}"></div></div>
+    <div class="field"><label>Endereço cadastral</label><input class="input" id="cf_owner_addr" value="${escapeHtml(u.address||shop.address||'')}"></div>
+    <div class="field"><label>Senha</label><button class="btn btn-ghost" type="button" onclick="openOwnerPasswordModal()">${icon('lock')} Trocar senha</button><small class="muted">A senha é alterada no Firebase Auth e não fica salva no banco.</small></div>
+  </div>
   <div class="panel"><div class="panel-head"><h3>Informações</h3><a class="btn btn-ghost btn-sm" onclick="Router.go('#/'+'${shop.slug}')">${icon('eye')} Ver página pública</a></div>
-    <div class="form-row"><div class="field"><label>Nome</label><input class="input" id="cf_name" value="${escapeHtml(shop.name)}"></div><div class="field"><label>Link público</label><div class="input" style="background:var(--surface-3);color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(shopPublicUrl(shop.slug).replace(/^https?:\/\//,''))}</div></div></div>
-    <div class="field"><label>Logo da barbearia</label>
+    <div class="form-row"><div class="field"><label>Nome</label><input class="input" id="cf_name" value="${escapeHtml(shop.name)}"></div><div class="field"><label>Link público</label><div class="input" style="background:var(--surface-3);color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(shopPublicUrl(shop.slug).replace(/^https?:\/\//,''))}</div><small class="muted">O link é permanente e não pode ser alterado após o cadastro.</small></div></div>
+    <div class="form-row"><div class="field"><label>Segmento</label><select class="input" id="cf_category">${BUSINESS_CATEGORIES.map(c=>`<option value="${c[0]}" ${shop.category===c[0]?'selected':''}>${c[1]}</option>`).join('')}</select></div><div class="field"><label>Tema visual</label><div class="theme-apply-row"><select class="input" id="cf_theme" onchange="previewConfigTheme(this.value)">${BUSINESS_THEMES.map(t=>`<option value="${t[1]}" ${(shop.themeId||'Ocean Blue')===t[1]?'selected':''}>${t[1]}</option>`).join('')}</select><button class="btn btn-primary btn-sm" type="button" onclick="applyConfigTheme()">${icon('check')} Aplicar tema</button></div><small class="muted" id="cf_theme_status">Tema atual: ${escapeHtml(shop.themeId||'Ocean Blue')}</small></div></div>
+    <div class="field"><label>Logo do negócio</label>
       <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
         <div id="cf_logo_preview" style="width:72px;height:72px;border-radius:16px;overflow:hidden;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0">
           ${shop.logoUrl?`<img src="${escapeHtml(shop.logoUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:1.4rem;font-weight:800;color:var(--primary)">${initials(shop.name)}</span>`}
@@ -649,7 +747,7 @@ function dashConfig(shop){
     </div>
     <div class="field"><label>Foto de capa</label>
       <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
-        <div id="cf_cover_preview" style="width:120px;height:68px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#242014,#0d0d0d);flex-shrink:0;display:flex;align-items:center;justify-content:center">
+        <div id="cf_cover_preview" style="width:120px;height:68px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,#EEF2FF,#FFFFFF);flex-shrink:0;display:flex;align-items:center;justify-content:center">
           ${shop.coverUrl?`<img src="${escapeHtml(shop.coverUrl)}" style="width:100%;height:100%;object-fit:cover">`:`<span class="muted" style="font-size:11px">Sem capa</span>`}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px"><label class="btn btn-ghost btn-sm" for="cf_cover_file" style="cursor:pointer;margin:0">${icon('upload')} ${shop.coverUrl?'Substituir capa':'Adicionar capa'}</label>
@@ -661,75 +759,177 @@ function dashConfig(shop){
     </div>
     <div class="field"><label>Descrição</label><textarea class="input" id="cf_desc">${escapeHtml(shop.description||'')}</textarea></div>
     <div class="field"><label>Endereço</label><input class="input" id="cf_addr" value="${escapeHtml(shop.address||'')}"></div>
-    <div class="form-row three"><div class="field"><label>Cidade</label><input class="input" id="cf_city" value="${escapeHtml(shop.city||'')}"></div><div class="field"><label>Bairro</label><input class="input" id="cf_neigh" value="${escapeHtml(shop.neighborhood||'')}"></div><div class="field"><label>Instagram</label><input class="input" id="cf_ig" value="${escapeHtml(shop.instagram||'')}"></div></div>
+    <div class="form-row three"><div class="field"><label>Cidade</label><input class="input" id="cf_city" value="${escapeHtml(shop.city||'')}"></div><div class="field"><label>Bairro</label><input class="input" id="cf_neigh" value="${escapeHtml(shop.neighborhood||'')}"></div><div class="field"><label>Instagram</label><input class="input" id="cf_ig" value="${escapeHtml(instagramDisplay(shop.instagram)||shop.instagram||'')}" placeholder="@seunegocio ou link do perfil"></div></div>
     <div class="form-row"><div class="field"><label>Telefone</label><input class="input" id="cf_phone" value="${escapeHtml(shop.phone||'')}"></div><div class="field"><label>WhatsApp</label><input class="input" id="cf_wa" value="${escapeHtml(shop.whatsapp||'')}"></div></div>
   </div>
   <div class="panel"><div class="panel-head"><h3>Funcionamento</h3></div>
-    <div class="field"><label>Dias de funcionamento</label><div class="chips" id="cf_days">${DOW.map((d,i)=>`<span class="chip-toggle ${(shop.workDays??[1,2,3,4,5,6]).includes(i)?'on':''}" data-day="${i}" onclick="this.classList.toggle('on')">${d}</span>`).join('')}</div></div>
+    <div class="insight ${shop.schedulePaused?'warn':'pos'}" style="margin-bottom:14px"><span class="ii">${icon(shop.schedulePaused?'clock':'calendar')}</span><div><b>${shop.schedulePaused?'Agenda online pausada':'Agenda online ativa'}</b><p>${shop.schedulePaused?'Clientes não conseguem criar novos agendamentos pelo link público.':'Clientes conseguem agendar pelo link público nos horários liberados.'}</p></div><button class="btn ${shop.schedulePaused?'btn-primary':'btn-ghost'} btn-sm" onclick="toggleSchedulePause()">${icon(shop.schedulePaused?'play':'pause')} ${shop.schedulePaused?'Retomar agora':'Pausar agora'}</button></div>
     <div class="form-row"><div class="field"><label>Abertura</label><input class="input" type="time" id="cf_open" value="${shop.open}"></div><div class="field"><label>Fechamento</label><input class="input" type="time" id="cf_close" value="${shop.close}"></div></div>
     <div class="form-row three"><div class="field"><label>Almoço início</label><input class="input" type="time" id="cf_ls" value="${shop.lunchStart}"></div><div class="field"><label>Almoço fim</label><input class="input" type="time" id="cf_le" value="${shop.lunchEnd}"></div><div class="field"><label>Intervalo de horários</label><select class="input" id="cf_int">${[15,20,30,45,60].map(i=>`<option value="${i}" ${shop.slotInterval===i?'selected':''}>${i} min</option>`).join('')}</select></div></div>
+    <div class="field"><label>Horários por dia</label><div class="schedule-day-grid">${configDayHourRows(shop)}</div><small class="muted">Use para meio período, sábado reduzido, domingo fechado ou mudanças de rotina.</small></div>
   </div>
   <div style="display:flex;justify-content:flex-end"><button class="btn btn-primary" onclick="saveConfig()">${icon('check')} Salvar configurações</button></div>`;
 }
-async function saveConfig(){const shop=dashShop();const workDays=[...$$('#cf_days .chip-toggle.on')].map(el=>+el.dataset.day);const data={name:$('#cf_name').value.trim(),description:$('#cf_desc').value.trim(),address:$('#cf_addr').value.trim(),city:$('#cf_city').value.trim(),neighborhood:$('#cf_neigh').value.trim(),instagram:$('#cf_ig').value.trim(),phone:$('#cf_phone').value.trim(),whatsapp:$('#cf_wa').value.trim(),open:$('#cf_open').value,close:$('#cf_close').value,lunchStart:$('#cf_ls').value,lunchEnd:$('#cf_le').value,slotInterval:+$('#cf_int').value,workDays};
+function storageUploadMsg(e,item){
+  const c=(e&&e.code)||'';
+  if(c==='image-too-large')return 'Imagem maior que 5MB.';
+  if(c==='invalid-image')return 'O arquivo selecionado não parece ser uma imagem.';
+  if(c==='storage-not-configured')return 'Firebase Storage ainda não está configurado.';
+  if(/unauthorized|permission-denied/.test(c))return `Sem permissão para enviar ${item}. Recarregue a página e tente novamente.`;
+  return `Não foi possível enviar ${item}${c?' ('+c+')':''}.`;
+}
+function saveTenantMsg(e){
+  const c=(e&&e.code)||'';
+  if(/unauthorized|permission-denied/.test(c))return 'Sem permissão para salvar as configurações deste negócio. Recarregue a página e entre novamente.';
+  return `Não foi possível salvar as configurações${c?' ('+c+')':''}.`;
+}
+async function applyConfigTheme(){
+  const shop=dashShop();
+  const themeId=$('#cf_theme')?$('#cf_theme').value:(shop.themeId||'Ocean Blue');
+  const status=$('#cf_theme_status');
+  const patch={themeId};
+  applyBusinessTheme({themeId});
+  if(status)status.textContent='Salvando tema...';
+  try{
+    if(window.__FB_ENABLED&&window.fbSaveTenantProfile)await fbSaveTenantProfile(shop.id,patch);
+    DB.update('barbershops',shop.id,patch);
+    DB.log('Tema visual alterado',themeId,shop.id);
+    if(status)status.textContent=`Tema aplicado: ${themeId}`;
+    toast('Tema aplicado.','ok');
+    refreshShell();
+  }catch(e){
+    console.warn('[Groomin] aplicar tema:',e.code,e.message);
+    applyBusinessTheme(shop);
+    if(status)status.textContent='Não foi possível salvar o tema.';
+    toast(saveTenantMsg(e),'err');
+  }
+}
+function openOwnerEmailModal(){
+  const u=Session.effectiveUser||Session.user||{};
+  const current=u.email||'';
+  openModal(`<div class="modal-head"><div><h3>${icon('mail')} Trocar e-mail de login</h3><div class="sub">${escapeHtml(current)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body"><div class="field"><label>Novo e-mail</label><input class="input" id="owner_new_email" type="email" value="${escapeHtml(current)}"></div></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveOwnerEmail()">${icon('check')} Salvar e-mail</button></div>`);
+}
+async function saveOwnerEmail(){
+  const email=($('#owner_new_email')&&$('#owner_new_email').value||'').trim().toLowerCase();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Informe um e-mail válido.','err');return;}
+  const shop=dashShop();const u=Session.effectiveUser||Session.user||{};
+  try{
+    if(window.__FB_ENABLED&&window.fbUpdateOwnProfile)await fbUpdateOwnProfile({email});
+    if(u&&(u.id||u.uid))DB.update('users',u.id||u.uid,{email});
+    DB.update('barbershops',shop.id,{email});
+    const key=Session.impersonating?'groomin_imp':'groomin_user';
+    try{sessionStorage.setItem(key,JSON.stringify({...u,email}));}catch(_){}
+    closeModal();toast('E-mail de login atualizado.','ok');renderDashboard({sub:'config'});
+  }catch(e){
+    console.warn('[Groomin] trocar e-mail:',e&&e.code||'',e&&e.message||e);
+    toast((e&&e.message)||'Não foi possível trocar o e-mail.','err');
+  }
+}
+function openOwnerPasswordModal(){
+  openModal(`<div class="modal-head"><div><h3>${icon('lock')} Trocar senha</h3><div class="sub">Use pelo menos 6 caracteres.</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body"><div class="form-row"><div class="field"><label>Nova senha</label><input class="input" id="owner_new_pass" type="password" autocomplete="new-password"></div><div class="field"><label>Confirmar senha</label><input class="input" id="owner_new_pass2" type="password" autocomplete="new-password"></div></div></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveOwnerPassword()">${icon('check')} Salvar senha</button></div>`);
+}
+async function saveOwnerPassword(){
+  const password=($('#owner_new_pass')&&$('#owner_new_pass').value)||'';
+  const confirm=($('#owner_new_pass2')&&$('#owner_new_pass2').value)||'';
+  if(password.length<6){toast('A senha precisa ter pelo menos 6 caracteres.','err');return;}
+  if(password!==confirm){toast('As senhas não conferem.','err');return;}
+  try{
+    if(window.__FB_ENABLED&&window.fbUpdateOwnProfile)await fbUpdateOwnProfile({password});
+    closeModal();toast('Senha atualizada.','ok');
+  }catch(e){
+    console.warn('[Groomin] trocar senha:',e&&e.code||'',e&&e.message||e);
+    toast((e&&e.message)||'Não foi possível trocar a senha.','err');
+  }
+}
+async function saveConfig(){const shop=dashShop();const dayHours={};DOW.forEach((_,i)=>{dayHours[i]={active:!!($('#cf_day_active_'+i)&&$('#cf_day_active_'+i).classList.contains('on')),start:$('#cf_day_start_'+i).value,end:$('#cf_day_end_'+i).value};});const workDays=Object.entries(dayHours).filter(([,v])=>v.active).map(([k])=>+k);const account={name:$('#cf_owner_name').value.trim(),email:$('#cf_owner_email').value.trim(),phone:$('#cf_owner_phone').value.trim(),whatsapp:$('#cf_owner_wa').value.trim(),address:$('#cf_owner_addr').value.trim(),password:''};const data={name:$('#cf_name').value.trim(),category:$('#cf_category').value,themeId:$('#cf_theme').value,description:$('#cf_desc').value.trim(),address:$('#cf_addr').value.trim(),city:$('#cf_city').value.trim(),neighborhood:$('#cf_neigh').value.trim(),instagram:normalizeInstagram($('#cf_ig').value),phone:$('#cf_phone').value.trim(),whatsapp:$('#cf_wa').value.trim(),open:$('#cf_open').value,close:$('#cf_close').value,lunchStart:$('#cf_ls').value,lunchEnd:$('#cf_le').value,slotInterval:+$('#cf_int').value,workDays,dayHours};
+  if(account.name.length<2){toast('Informe seu nome cadastral.','err');return;}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(account.email)){toast('Informe um e-mail cadastral válido.','err');return;}
+  if(account.password&&account.password.length<6){toast('A senha precisa ter pelo menos 6 caracteres.','err');return;}
+  for(const [day,h] of Object.entries(dayHours)){if(h.active&&timeToMin(h.start)>=timeToMin(h.end)){toast(`${DOW[+day]}: o fim precisa ser depois do início.`,`err`);return;}}
+  if(window.__FB_ENABLED&&window.fbUpdateOwnProfile){try{await fbUpdateOwnProfile(account);}catch(e){console.warn('[Groomin] salvar conta:',e.code,e.message);toast((e&&e.message)||'Não foi possível salvar seus dados cadastrais.','err');return;}}
+  const su=Session.effectiveUser||Session.user;if(su&&(su.id||su.uid)){DB.update('users',su.id||su.uid,{name:account.name,email:account.email,phone:account.phone,whatsapp:account.whatsapp,address:account.address});const key=Session.impersonating?'groomin_imp':'groomin_user';try{sessionStorage.setItem(key,JSON.stringify({...su,name:account.name,email:account.email,phone:account.phone,whatsapp:account.whatsapp,address:account.address}));}catch(_){}} 
+  data.ownerName=account.name;
+  data.email=account.email;
   if($('#cf_logo_remove')&&$('#cf_logo_remove').value==='1'){if(shop.logoPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(shop.logoPath).catch(()=>{});data.logoUrl='';data.logoPath='';}
   if($('#cf_cover_remove')&&$('#cf_cover_remove').value==='1'){if(shop.coverPath&&window.fbDeleteStoragePath)fbDeleteStoragePath(shop.coverPath).catch(()=>{});data.coverUrl='';data.coverPath='';}
+  // Salva dados de texto primeiro; uploads de imagem são independentes e não interrompem o save.
+  if(window.__FB_ENABLED&&window.fbSaveTenantProfile){try{await fbSaveTenantProfile(shop.id,data);}catch(e){console.warn('[Groomin] salvar perfil tenant:',e.code,e.message);toast(saveTenantMsg(e),'err');return;}}
   const file=$('#cf_logo_file')&&$('#cf_logo_file').files[0];
-  if(file&&window.fbUploadTenantImage){try{toast('Enviando logo...','info');const up=await fbUploadTenantImage(shop.id,'logos',file,shop.logoPath);data.logoUrl=up.url;data.logoPath=up.path;}catch(e){toast(e.code==='image-too-large'?'Imagem maior que 5MB.':e.code==='storage-not-configured'?'Firebase Storage ainda não foi configurado.':'Não foi possível enviar o logo.','err');return;}}
   const coverFile=$('#cf_cover_file')&&$('#cf_cover_file').files[0];
-  if(coverFile&&window.fbUploadTenantImage){try{toast('Enviando capa...','info');const upc=await fbUploadTenantImage(shop.id,'covers',coverFile,shop.coverPath);data.coverUrl=upc.url;data.coverPath=upc.path;}catch(e){toast('Não foi possível enviar a foto de capa.','err');return;}}
-  DB.update('barbershops',shop.id,data);DB.log('Configurações atualizadas',shop.name,shop.id);toast('Configurações salvas.','ok');refreshShell();}
+  DB.update('barbershops',shop.id,data);applyBusinessTheme({...shop,...data});DB.log('Configurações atualizadas',shop.name,shop.id);toast('Configurações salvas.','ok');
+  if(file&&window.fbUploadTenantImage){try{toast('Enviando logo...','info');const up=await fbUploadTenantImage(shop.id,'logos',file,shop.logoPath);const lp={logoUrl:up.url,logoPath:up.path};if(window.fbSaveTenantProfile)await fbSaveTenantProfile(shop.id,lp);DB.update('barbershops',shop.id,lp);}catch(e){console.warn('[Groomin] upload logo:',e.code,e.message);toast(storageUploadMsg(e,'o logo'),'err');}}
+  if(coverFile&&window.fbUploadTenantImage){try{toast('Enviando capa...','info');const upc=await fbUploadTenantImage(shop.id,'covers',coverFile,shop.coverPath);const cp={coverUrl:upc.url,coverPath:upc.path};if(window.fbSaveTenantProfile)await fbSaveTenantProfile(shop.id,cp);DB.update('barbershops',shop.id,cp);}catch(e){console.warn('[Groomin] upload capa:',e.code,e.message);toast(storageUploadMsg(e,'a capa'),'err');}}
+  refreshShell();
+}
 
 /* ---------- Assinatura ---------- */
 function dashSubscription(shop){
+  const _s=DB.get().settings||{};
+  if(window.__FB_ENABLED&&window.fbLoadPlatformSettings&&!_s._fbPlansLoaded){
+    fbLoadPlatformSettings().then(()=>{DB.get().settings._fbPlansLoaded=true;renderDashboard({sub:'assinatura'});}).catch(()=>{});
+  }
   const sub=shopSubscription(shop.id)||{};
-  const plan=DB.find('plans',shop.planId)||DB.find('plans','free');
+  const normalizedPlanId=['growth','pro','elite','enterprise'].includes(shop.planId)?'monthly':shop.planId;
+  const plan=DB.find('plans',normalizedPlanId)||DB.find('plans','free');
   const e=shopEntitlements(shop.id);
   const isTrialing=sub.status==='trialing';
   const t=DB.todayISO();
-  const renewsAt=sub.renewsAt||t;
+  const renewsAt=tsToISO(sub.renewsAt)||t;
   const daysLeft=Math.max(0,Math.ceil((new Date(renewsAt+'T00:00:00')-new Date())/86400000));
+  const freeLimit=normalizedPlanId==='free'?Number(shop.freeBookingLimit||sub.freeBookingLimit||3):null;
+  const freeUsed=normalizedPlanId==='free'?DB.scope('appointments',shop.id).filter(a=>a.status!=='cancelado').length:0;
+  const freeRemaining=freeLimit!=null?Math.max(0,freeLimit-freeUsed):0;
+  const cancelAtPeriodEnd=sub.cancelAtPeriodEnd===true;
   const statusMap={active:['ok','Ativo'],trialing:['info','Trial'],past_due:['danger','Em atraso'],canceled:['muted','Cancelado']};
   const[stCls,stLabel]=statusMap[sub.status]||['muted','—'];
-  const plans=DB.get().plans.filter(p=>!p.enterprise);
+  const plans=paidPlansForSale();
+  const cycleLabel=normalizedPlanId==='annual'?'Anual':normalizedPlanId==='founder'?'Pagamento único':'Mensal';
+  const valueLabel=normalizedPlanId==='founder'?'R$ 990 pagamento único':normalizedPlanId==='annual'?'R$ 151,98/ano':(sub.mrr||e.monthly)>0?money(sub.mrr||e.monthly)+'/mês':'Grátis';
   return `<div class="page-head"><div><h2>Assinatura</h2><p>Gerencie seu plano e cobrança na Groomin</p></div></div>
 
-  <div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(212,175,55,.07),transparent),var(--surface)">
+  <div class="panel" style="border-color:var(--primary);background:linear-gradient(135deg,rgba(124,58,237,.07),transparent),var(--surface)">
     <div class="panel-head">
       <div><h3>${e.isEnterprise?icon('building')+' ':''}Plano atual: <b>${escapeHtml(e.planName)}</b></h3><span class="badge ${stCls}">${stLabel}</span></div>
       ${!e.isEnterprise?`<button class="btn btn-primary btn-sm" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`:''}
     </div>
-    ${isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu trial termina em ${fmtDate(renewsAt)}. Faça upgrade para não perder o acesso aos recursos.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Ativar agora</button></div>`:''}
+    ${normalizedPlanId==='free'?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('calendar')}</span><div><b>Teste grátis: ${freeUsed}/${freeLimit} agendamento(s) usados</b><p>${freeRemaining>0?`Você ainda pode receber ${freeRemaining} agendamento(s) antes de assinar.`:'Seu teste gratuito foi concluído. Assine um plano para continuar recebendo agendamentos.'}</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Ver planos</button></div>`:isTrialing?`<div class="insight warn" style="margin:12px 0"><span class="ii">${icon('clock')}</span><div><b>${daysLeft} dia(s) restante(s) no período de teste</b><p>Seu teste termina em ${fmtDate(renewsAt)}. Após esse período, a cobrança do plano selecionado será iniciada pelo Stripe.</p></div><button class="btn btn-primary btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openPlanSelectorOwner('${shop.id}')">Ver planos</button></div>`:''}
+    ${normalizedPlanId==='founder'?`<div class="insight ok" style="margin:12px 0"><span class="ii">${icon('check')}</span><div><b>Cliente Fundador</b><p>Sem mensalidade enquanto o Groomin permanecer em operação. Novos módulos premium poderão ser comercializados separadamente.</p></div></div>`:''}
     <div class="form-row three" style="margin-top:14px">
       <div class="summary-line"><span class="muted">Plano</span><b>${escapeHtml(plan.name)}</b></div>
       <div class="summary-line"><span class="muted">Status</span><b>${stLabel}</b></div>
-      <div class="summary-line"><span class="muted">${isTrialing?'Fim do trial':'Renovação'}</span><b>${fmtDate(renewsAt)}</b></div>
+      <div class="summary-line"><span class="muted">${normalizedPlanId==='free'?'Agendamentos grátis':isTrialing?'Fim do trial':'Renovação'}</span><b>${normalizedPlanId==='free'?`${freeUsed}/${freeLimit}`:fmtDate(renewsAt)}</b></div>
     </div>
     <div class="form-row three">
       <div class="summary-line"><span class="muted">Profissionais</span><b>${DB.scope('barbers',shop.id).filter(b=>b.active).length} / ${e.limitBarbers>=999?'∞':e.limitBarbers}</b></div>
-      <div class="summary-line"><span class="muted">Valor</span><b>${(sub.mrr||e.monthly)>0?money(sub.mrr||e.monthly)+'/mês':'Grátis'}</b></div>
-      <div class="summary-line"><span class="muted">Ciclo</span><b>Mensal</b></div>
+      <div class="summary-line"><span class="muted">Valor</span><b>${valueLabel}</b></div>
+      <div class="summary-line"><span class="muted">Ciclo</span><b>${cycleLabel}</b></div>
     </div>
     <div class="chips" style="margin-top:12px">${ENT_FEATURES.map(f=>`<span class="badge ${e[f[0]]?'ok':'muted'}">${e[f[0]]?icon('check'):icon('x')} ${f[1]}</span>`).join('')}</div>
     ${e.isEnterprise?'<p class="muted" style="font-size:12.5px;margin-top:12px">Plano sob medida Groomin. Para ajustes, fale com nosso comercial.</p>':''}
+    ${cancelAtPeriodEnd?`<div class="insight warn" style="margin-top:12px"><span class="ii">${icon('clock')}</span><div><b>Alteração de plano agendada</b><p>Seu plano atual permanece ativo até ${fmtDate(renewsAt)}. Após isso, será rebaixado automaticamente.</p></div></div>`:''}
   </div>
 
-  <div class="panel-head" style="margin-top:24px"><h3>Comparar planos</h3><p class="muted">Faça upgrade ou downgrade a qualquer momento</p></div>
+  <div class="panel-head" style="margin-top:24px"><h3>Planos disponíveis</h3><p class="muted">Todos incluem as funcionalidades atuais do Groomin.</p></div>
   <div class="pricing-grid" style="margin-bottom:16px">
     ${plans.map(p=>{
-      const isCurrent=shop.planId===p.id;
-      const isPro=p.id==='pro';
-      return `<div class="price-card ${isCurrent?'featured':isPro&&!isCurrent?'':''}">
+      const isCurrent=normalizedPlanId===p.id;
+      const isFeatured=p.id==='annual'||p.id==='founder';
+      const displayPrice=p.id==='annual'?'R$ 151,98<small>/ano</small>':p.id==='founder'?'R$ 990<small> pagamento único</small>':'R$ 14,90<small>/mês</small>';
+      return `<div class="price-card ${isCurrent?'featured':isFeatured&&!isCurrent?'featured-lite':''}">
         ${isCurrent?`<span class="pc-tag">${icon('check')} Seu plano</span>`:p.badge?`<span class="pc-tag">${escapeHtml(p.badge)}</span>`:''}
         <h3>${escapeHtml(p.name)}</h3>
-        <div class="pc-price">${p.price===0?'Grátis':'R$ '+p.price+'<small>/mês</small>'}</div>
+        <div class="pc-price">${displayPrice}</div>
         <div class="pc-desc">${escapeHtml(p.tagline||'')}</div>
         <ul>${p.features.slice(0,4).map(f=>`<li>${icon('check')} ${escapeHtml(f)}</li>`).join('')}</ul>
         ${isCurrent
           ?`<button class="btn btn-outline btn-block" disabled>Plano atual</button>`
           :p.price>(plan.price||0)
-            ?`<button class="btn btn-primary btn-block" onclick="applyPlanUpgrade('${shop.id}','${p.id}')">${icon('rocket')} Fazer upgrade</button>`
-            :`<button class="btn btn-ghost btn-block" onclick="requestPlanDowngrade('${shop.id}','${p.id}')">${icon('down')} Solicitar downgrade</button>`}
+            ?`<button class="btn btn-primary btn-block" onclick="openOwnerStripeCheckout('${shop.id}','${p.id}',this)">${icon('rocket')} Escolher plano</button>`
+            :`<button class="btn btn-ghost btn-block" onclick="requestPlanDowngrade('${shop.id}','${p.id}')">Solicitar alteração</button>`}
       </div>`;}).join('')}
   </div>
 
@@ -737,48 +937,102 @@ function dashSubscription(shop){
     <div class="panel-head"><h3>Ações da conta</h3></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       ${e.isEnterprise
-        ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com comercial</a>`
+        ?`<a class="btn btn-primary" href="https://wa.me/5511999990000" target="_blank" rel="noopener">${icon('whatsapp')} Falar com suporte</a>`
         :`<button class="btn btn-primary" onclick="openPlanSelectorOwner('${shop.id}')">${icon('rocket')} Mudar plano</button>`}
-      ${sub.status!=='canceled'&&shop.planId!=='free'?`<button class="btn btn-ghost" style="color:var(--danger)" onclick="confirmAction('Cancelar assinatura?','Você terá acesso até o fim do ciclo atual. Entre em contato para confirmar.',()=>{toast('Para cancelar, escreva para contato@groomin.com.br','info');})">${icon('x')} Cancelar assinatura</button>`:''}
+      ${sub.status!=='canceled'&&normalizedPlanId!=='free'?`<button class="btn btn-ghost" style="color:var(--danger)" onclick="cancelSubscriptionOwner('${shop.id}')">${icon('x')} Cancelar assinatura</button>`:''}
     </div>
   </div>`;
 }
+async function cancelSubscriptionOwner(shopId){
+  confirmAction('Cancelar assinatura?','Seu acesso será encerrado imediatamente e o plano voltará para o teste gratuito.',async()=>{
+    if(!window.__FB_ENABLED||!window.fbCancelSubscription){toast('Função indisponível. Tente recarregar a página.','err');return;}
+    try{
+      const btn=document.querySelector('[onclick*="cancelSubscriptionOwner"]');
+      if(btn){btn.disabled=true;btn.innerHTML=icon('clock')+' Cancelando...';}
+      await fbCancelSubscription({tenantId:shopId});
+      toast('Assinatura cancelada. Seu plano foi alterado para gratuito.','ok');
+      Router.go('#/dashboard/assinatura');
+    }catch(e){
+      console.warn('[Groomin] cancelSubscription:',e.code||'',e.message||e);
+      toast('Não foi possível cancelar. Tente novamente ou escreva para contato.groominbarber@gmail.com','err');
+    }
+  });
+}
 function openPlanSelectorOwner(shopId){
   const shop=DB.find('barbershops',shopId);
-  const currentPlan=DB.find('plans',shop.planId)||{price:0};
+  const currentPlanId=['growth','pro','elite','enterprise'].includes(shop.planId)?'monthly':shop.planId;
+  const currentPlan=DB.find('plans',currentPlanId)||{price:0};
   openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Mudar plano</h3><div class="sub">${escapeHtml(shop.name)}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
-  <div class="modal-body"><div class="grid" style="gap:10px">${DB.all('plans').filter(p=>!p.enterprise).map(p=>{
-    const isCurrent=shop.planId===p.id;
+  <div class="modal-body"><div class="grid" style="gap:10px">${paidPlansForSale().slice().sort((a,b)=>(a.id==='annual'?-1:b.id==='annual'?1:0)).map(p=>{
+    const isCurrent=currentPlanId===p.id;
     const isUpgrade=p.price>(currentPlan.price||0);
     const action=isCurrent?''
-      :isUpgrade?`onclick="applyPlanUpgrade('${shopId}','${p.id}')"`
+      :isUpgrade?`onclick="openOwnerStripeCheckout('${shopId}','${p.id}',this)"`
       :`onclick="requestPlanDowngrade('${shopId}','${p.id}')"`;
-    return `<div class="select-item ${isCurrent?'sel':''}" ${isCurrent?'':action} style="${isCurrent?'cursor:default':''}">
+    const highlight=p.id==='annual'&&!isCurrent?';border-color:var(--primary);background:linear-gradient(135deg,rgba(124,58,237,.07),transparent)':'';
+    return `<div class="select-item ${isCurrent?'sel':''}" ${isCurrent?'':action} style="${isCurrent?'cursor:default':''}${highlight}">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div class="t">${escapeHtml(p.name)}${isCurrent?' <span class="badge ok" style="font-size:10px">atual</span>':''}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div>
-        <div class="p">${p.price===0?'Grátis':money(p.price)+'/mês'}</div>
+        <div><div class="t">${escapeHtml(p.name)}${isCurrent?' <span class="badge ok" style="font-size:10px">atual</span>':p.badge?` <span class="badge gold" style="font-size:10px">${escapeHtml(p.badge)}</span>`:''}</div><div class="d">${escapeHtml(p.tagline||p.features[0])}</div></div>
+        <div class="p">${p.id==='annual'?'R$ 151,98/ano':p.id==='founder'?'R$ 990 pagamento único':money(p.price)+'/mês'}</div>
       </div></div>`;}).join('')}</div>
-  <p class="muted" style="font-size:12.5px;margin-top:12px">Upgrade é ativado imediatamente. Downgrade e cancelamento: contato@groomin.com.br</p></div>`);
+  <p class="muted" style="font-size:12.5px;margin-top:12px">Alterações de plano e cancelamento: <a href="mailto:contato.groominbarber@gmail.com" style="color:inherit">contato.groominbarber@gmail.com</a></p></div>`);
 }
-function applyPlanUpgrade(shopId,planId){
+async function openOwnerStripeCheckout(shopId,planId,btn){
   const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId);
   if(!shop||!plan)return;
-  DB.update('barbershops',shopId,{planId});
-  const sub=shopSubscription(shopId);
-  if(sub)DB.update('subscriptions',sub.id,{planId,mrr:plan.price,status:'active'});
-  DB.log('Upgrade de plano',`${shopId} → ${planId}`);
-  closeModal();
-  toast(`Plano ${plan.name} ativado! Aproveite os novos recursos.`,'ok');
-  renderDashboard({sub:'assinatura'});
+  const old=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='Abrindo Stripe...';}
+  try{
+    if(!window.__FB_ENABLED||!window.fbCreateStripeCheckout)throw new Error('stripe-unavailable');
+    const u=Session&&Session.effectiveUser||{};
+    const checkout=await fbCreateStripeCheckout({
+      planId,
+      tenantId: shop.id,
+      email:u.email||shop.email||'',
+      ownerName:u.name||shop.ownerName||'',
+      shopName:shop.name||'',
+      successUrl:location.origin+'/app/#/stripe/success',
+      cancelUrl:location.origin+'/app/#/stripe/cancel'
+    });
+    if(!checkout||!checkout.url)throw new Error('stripe-url-missing');
+    closeModal();
+    toast('Redirecionando para o Stripe...','ok');
+    location.href=checkout.url;
+  }catch(e){
+    console.warn('[Groomin] owner checkout:',e.code||'',e.message||e);
+    toast('Não foi possível abrir o Stripe. Verifique sua sessão e tente novamente.','err');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML=old;}
+  }
+}
+function applyPlanUpgrade(shopId,planId){
+  openOwnerStripeCheckout(shopId,planId,null);
 }
 function requestPlanDowngrade(shopId,planId){
   const shop=DB.find('barbershops',shopId),plan=DB.find('plans',planId);
   if(!shop||!plan)return;
-  const subject=encodeURIComponent(`Solicitação de downgrade — ${shop.name}`);
-  const body=encodeURIComponent(`Olá! Gostaria de solicitar o downgrade para o plano ${plan.name} da barbearia ${shop.name} (ID: ${shopId}).\n\nE-mail de contato: ${shop.email||''}`);
   closeModal();
-  location.href=`mailto:contato@groomin.com.br?subject=${subject}&body=${body}`;
-  toast('E-mail de solicitação de downgrade preparado.','info');
+  openModal(`<div class="modal-head"><div><h3>${icon('creditCard')} Alterar plano</h3></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body">
+    <div class="insight warn"><span class="ii">${icon('clock')}</span><div><b>Mudança agendada para o fim do período</b><p>Seu plano atual permanece ativo até a data de renovação. Após isso, será alterado para <b>${escapeHtml(plan.name)}</b>.</p></div></div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button id="btn_downgrade" class="btn btn-primary" onclick="confirmPlanDowngrade('${shopId}','${planId}')">Confirmar alteração</button></div>`);
+}
+async function confirmPlanDowngrade(shopId,planId){
+  if(!window.__FB_ENABLED||!window.fbChangePlan){toast('Função indisponível. Recarregue a página.','err');return;}
+  const btn=document.getElementById('btn_downgrade');
+  if(btn){btn.disabled=true;btn.innerHTML=icon('clock')+' Processando...';}
+  try{
+    const result=await fbChangePlan({tenantId:shopId,newPlanId:planId});
+    const dateStr=result.currentPeriodEnd?new Date(result.currentPeriodEnd).toLocaleDateString('pt-BR'):'';
+    closeModal();
+    toast(`Alteração agendada. Seu plano atual segue ativo até ${dateStr}.`,'ok');
+    Router.go('#/dashboard/assinatura');
+  }catch(e){
+    console.warn('[Groomin] changePlan:',e.code||'',e.message||e);
+    if(btn){btn.disabled=false;btn.innerHTML='Confirmar alteração';}
+    toast(e.message||'Não foi possível alterar o plano. Tente novamente.','err');
+  }
 }
 
 /* ============================================================
@@ -788,7 +1042,11 @@ let barberTab='hoje';
 function renderBarber(){
   destroyCharts();
   const u=Session.effectiveUser;const shop=DB.find('barbershops',u.barbershopId);const barber=DB.find('barbers',u.barberId);
-  if(!barber){toast('Perfil de barbeiro não encontrado.','err');location.hash='#/';return;}
+  if(!shop){
+    if(window.__FB_ENABLED&&u.barbershopId){$('#root').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px"><div class="skeleton" style="width:48px;height:48px;border-radius:50%"></div><div class="skeleton" style="width:200px;height:16px;border-radius:6px"></div><p class="muted" style="font-size:13px">Carregando dados...</p></div>`;return;}
+    toast('Conta sem barbearia vinculada.','err');location.hash='#/';return;
+  }
+  if(!barber){toast('Perfil de colaborador não encontrado.','err');location.hash='#/';return;}
   const t=DB.todayISO();
   const mine=DB.scope('appointments',shop.id).filter(a=>a.barberId===barber.id);
   const today=mine.filter(a=>a.date===t&&a.status!=='cancelado').sort((x,y)=>x.time.localeCompare(y.time));
@@ -806,7 +1064,7 @@ function renderBarber(){
   <div class="toolbar"><div class="seg"><button class="${barberTab==='hoje'?'on':''}" onclick="barberTab='hoje';renderBarber()">Hoje</button><button class="${barberTab==='proximos'?'on':''}" onclick="barberTab='proximos';renderBarber()">Próximos</button><button class="${barberTab==='todos'?'on':''}" onclick="barberTab='todos';renderBarber()">Histórico</button></div>
     <button class="btn btn-ghost btn-sm" onclick="barberBlock()">${icon('lock')} Bloquear meu horário</button></div>
   ${list.length?`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(290px,1fr))">${list.map(ap=>{const s=DB.find('services',ap.serviceId);return `<div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><b style="font-size:16px">${ap.time} · ${s?escapeHtml(s.name):'—'}</b><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></div><div class="t-user" style="margin-bottom:8px"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div><div class="summary-line"><span class="muted">Data</span><b>${fmtDate(ap.date)}</b></div><div class="summary-line"><span class="muted">Valor</span><b style="color:var(--primary)">${money(ap.price)}</b></div>${ap.status==='confirmado'||ap.status==='pendente'?`<button class="btn btn-primary btn-sm btn-block" style="margin-top:10px" onclick="apptStatus('${ap.id}','concluido')">${icon('check')} Marcar como concluído</button>`:''}</div>`;}).join('')}</div>`:emptyState('calendar','Nada por aqui','Sua agenda está livre neste período.')}`;
-  $('#root').innerHTML=mountShell({brandShop:shop,brandSub:'Barbeiro',nav,activeId:'',navBase:'#/my-schedule/',title:'Minha agenda',crumb:shop.name+' · '+barber.name,content,search:false});
+  $('#root').innerHTML=mountShell({brandShop:shop,brandSub:defaultRoleFor(shop),nav,activeId:'',navBase:'#/my-schedule/',title:'Minha agenda',crumb:shop.name+' · '+barber.name,content,search:false});
   renderShellNotif();
 }
 function barberBlock(){const u=Session.effectiveUser;const shop=DB.find('barbershops',u.barbershopId);agendaDate=DB.todayISO();
@@ -820,4 +1078,4 @@ function barberBlock(){const u=Session.effectiveUser;const shop=DB.find('barbers
   </div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveBarberBlock()">Bloquear</button></div>`);
 }
-function saveBarberBlock(){const u=Session.effectiveUser;const full=$('#bl_full').classList.contains('on');DB.insert('blocks',{barbershopId:u.barbershopId,barberId:u.barberId,date:$('#bl_date').value,start:$('#bl_start').value,end:$('#bl_end').value,reason:$('#bl_reason').value.trim(),fullDay:full});closeModal();toast('Horário bloqueado.','ok');renderBarber();}
+function saveBarberBlock(){const u=Session.effectiveUser;const full=$('#bl_full').classList.contains('on');const start=$('#bl_start').value,end=$('#bl_end').value;if(!full&&timeToMin(start)>=timeToMin(end)){toast('O fim precisa ser depois do início.','err');return;}DB.insert('blocks',{barbershopId:u.barbershopId,barberId:u.barberId,date:$('#bl_date').value,start,end,reason:$('#bl_reason').value.trim(),fullDay:full});closeModal();toast('Horário bloqueado.','ok');renderBarber();}

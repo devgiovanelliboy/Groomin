@@ -116,7 +116,7 @@ function cashMovementForm(){
   <div class="field"><label>Motivo</label><input class="input" id="cm_reason" placeholder="Ex.: troco, pagamento fornecedor"></div></div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveCashMovement()">Registrar</button></div>`);
 }
-function saveCashMovement(){const shop=dashShop();const cs=openSession(shop.id);const amount=+$('#cm_amount').value||0;if(amount<=0){toast('Informe o valor.','err');return;}const mv={type:$('#cm_type').value,amount,reason:$('#cm_reason').value.trim(),time:Date.now()};cs.movements=cs.movements||[];cs.movements.push(mv);DB.save();DB.log('Movimentação de caixa',(mv.type==='in'?'Suprimento ':'Sangria ')+money(amount),shop.id);closeModal();toast('Movimentação registrada.','ok');refreshShell();}
+function saveCashMovement(){const shop=dashShop();const cs=openSession(shop.id);const amount=+$('#cm_amount').value||0;if(amount<=0){toast('Informe o valor.','err');return;}const mv={type:$('#cm_type').value,amount,reason:$('#cm_reason').value.trim(),time:Date.now()};const movements=[...(cs.movements||[]),mv];DB.update('cashSessions',cs.id,{movements});DB.log('Movimentação de caixa',(mv.type==='in'?'Suprimento ':'Sangria ')+money(amount),shop.id);closeModal();toast('Movimentação registrada.','ok');refreshShell();}
 function salesHistory(){
   const shop=dashShop();const sales=DB.scope('sales',shop.id).slice().sort((a,b)=>b.createdAt-a.createdAt);
   const total=sales.reduce((s,x)=>s+x.total,0);

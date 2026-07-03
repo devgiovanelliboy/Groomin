@@ -11,7 +11,7 @@
 
 window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyCABD-0pmi8ihRSjtv0hXH61HIMzzOv1uE",
-  authDomain: "groomin.com.br",
+  authDomain: "groomin-952d0.firebaseapp.com",
   projectId: "groomin-952d0",
   storageBucket: "groomin-952d0.firebasestorage.app",
   messagingSenderId: "842337348210",
@@ -21,6 +21,9 @@ window.FIREBASE_CONFIG = {
 
 // VAPID key para Web Push (opcional — Console → Cloud Messaging → Web Push certificates)
 window.FCM_VAPID_KEY = "";
+
+// Stripe (teste). A chave publicável pode ficar no cliente; a secreta fica somente nas Cloud Functions.
+window.STRIPE_PUBLIC_KEY = "pk_test_51TmdGyCfwIrmI2EPVhYnSpnfZBDmkoe3q55J59XYBLHkmTwlZ9YIw0urISw1br6a1BMrCl6Jfg4xZE9EwoSbLWjP00nfASlaYy";
 
 // App Check (Firebase Console → App Check → Web app → reCAPTCHA Enterprise/v3).
 // Preencha com a site key e publique novamente; vazio mantém compatibilidade durante setup.

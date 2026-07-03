@@ -5,19 +5,29 @@ rules_version = '2';
 // Estrutura: /tenants/{tid}/{tipo}/{arquivo}
 //   logos, capas e fotos de barbeiros/produtos.
 // Leitura pública (imagens da página pública); escrita só do próprio tenant.
+// Usa custom claims (role, tenantId) — não faz get() no Firestore para evitar
+// problemas de avaliação cruzada de regras.
 // ============================================================
 
 service firebase.storage {
   match /b/{bucket}/o {
 
     function signedIn()    { return request.auth != null; }
-    function userPath()    { return /databases/(default)/documents/users/$(request.auth.uid); }
-    function hasUser()     { return signedIn() && firestore.exists(userPath()); }
-    function ud()          { return firestore.get(userPath()).data; }
-    function role()        { return hasUser() ? ud().role : ''; }
-    function tenant()      { return hasUser() ? ud().tenantId : ''; }
-    function isSuper()     { return signedIn() && role() == 'super_admin'; }
-    function mgrOf(tid)    { return signedIn() && tenant() == tid && (role() in ['owner','manager']); }
+    // custom claims setados por syncUserClaims (Cloud Function)
+    function claimRole()   { return request.auth.token.get('role', ''); }
+    function claimTid()    { return request.auth.token.get('tenantId', ''); }
+    function isSuper()     { return signedIn() && (
+                               claimRole() in ['super_admin', 'superadmin', 'admin_master']
+                               || request.auth.token.email == 'contato.groominbarber@gmail.com'
+                             ); }
+    function mgrOf(tid)    { return signedIn() && claimTid() == tid && (claimRole() in ['owner', 'manager']); }
+    // Fallback: lê ownerUid do tenant (cobre usuários com claims ainda não atualizados)
+    function tenantPath(tid) { return /databases/(default)/documents/tenants/$(tid); }
+    function ownsTenant(tid) {
+      return signedIn()
+             && firestore.exists(tenantPath(tid))
+             && firestore.get(tenantPath(tid)).data.ownerUid == request.auth.uid;
+    }
     // valida imagem e tamanho (<= 5MB)
     function validImage()  { return request.resource.size < 5 * 1024 * 1024
                                  && request.resource.contentType.matches('image/.*'); }
@@ -25,8 +35,9 @@ service firebase.storage {
     match /tenants/{tid}/{kind}/{fileName} {
       allow read:  if true;                          // imagens públicas
       allow create, update: if (kind in ['logos', 'covers', 'barbers', 'products'])
-                            && (isSuper() || mgrOf(tid)) && validImage();
-      allow delete: if isSuper() || mgrOf(tid);
+                            && validImage()
+                            && (isSuper() || mgrOf(tid) || ownsTenant(tid));
+      allow delete: if isSuper() || mgrOf(tid) || ownsTenant(tid);
     }
 
     // tudo o mais negado

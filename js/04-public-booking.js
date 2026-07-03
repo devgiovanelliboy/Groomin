@@ -20,16 +20,20 @@ function addToCalendar(){
 }
 function barberSlots(shopId,barberId,dateISO,duration){
   const shop=DB.find('barbershops',shopId);const barber=DB.find('barbers',barberId);
-  if(!shop||!barber||!barber.active)return [];
+  if(!shop||!barber||!barber.active||shop.schedulePaused)return [];
   const dow=new Date(dateISO+'T00:00:00').getDay();
-  if(!barber.days.includes(dow))return [];
+  const dayHours=shopDayHours(shop,dow);
+  if(!dayHours.active)return [];
+  if(!shop.dayHours&&Array.isArray(barber.days)&&!barber.days.includes(dow))return [];
   if((barber.vacations||[]).some(v=>dateISO>=v.start&&dateISO<=v.end))return [];
   // full-day block
-  const blocks=DB.scope('blocks',shopId).filter(b=>b.barberId===barberId&&b.date===dateISO);
+  const blocks=DB.scope('blocks',shopId).filter(b=>(b.barberId===barberId||b.barberId==='all')&&b.date===dateISO);
   if(blocks.some(b=>b.fullDay))return [];
   const interval=shop.slotInterval||30;
-  const startM=timeToMin(barber.start),endM=timeToMin(barber.end);
-  const lunchS=timeToMin(barber.lunchStart||shop.lunchStart),lunchE=timeToMin(barber.lunchEnd||shop.lunchEnd);
+  const startM=Math.max(timeToMin(barber.start||dayHours.start),timeToMin(dayHours.start));
+  const endM=Math.min(timeToMin(barber.end||dayHours.end),timeToMin(dayHours.end));
+  if(startM>=endM)return [];
+  const lunchS=timeToMin(barber.lunchStart||shop.lunchStart||'12:00'),lunchE=timeToMin(barber.lunchEnd||shop.lunchEnd||'13:00');
   const taken=DB.scope('appointments',shopId).filter(a=>a.barberId===barberId&&a.date===dateISO&&a.status!=='cancelado')
     .map(a=>{const s=DB.find('services',a.serviceId);const m=timeToMin(a.time);return[m,m+(s?s.duration:30)];});
   const blkRanges=blocks.filter(b=>!b.fullDay).map(b=>[timeToMin(b.start),timeToMin(b.end)]);
@@ -64,14 +68,48 @@ function firstAvailableBarber(shopId,dateISO,time,duration){
    PUBLIC BARBERSHOP PAGE (slug) — SEO-friendly, serves customers
    ============================================================ */
 /* Public booking page V2: tenant website, no marketplace surfaces */
-function publicPhotoUrls(shop,barbers){
-  const urls=[shop.coverUrl,shop.logoUrl,...(Array.isArray(shop.photos)?shop.photos:[]),...barbers.map(b=>b.photoUrl)].filter(Boolean);
-  return [...new Set(urls)].slice(0,8);
+function shopDayHours(shop,dow){
+  const dayKey=String(dow);
+  const cfg=shop&&shop.dayHours&&(shop.dayHours[dayKey]||shop.dayHours[dow]);
+  const fallbackActive=Array.isArray(shop&&shop.workDays)?shop.workDays.includes(dow):[1,2,3,4,5,6].includes(dow);
+  return {
+    active:cfg&&typeof cfg.active!=='undefined'?!!cfg.active:fallbackActive,
+    start:(cfg&&cfg.start)||shop.open||'09:00',
+    end:(cfg&&cfg.end)||shop.close||'19:00'
+  };
 }
 function publicDayList(days){
   const active=Array.isArray(days)&&days.length?days:[1,2,3,4,5,6];
   return DOW.map((d,i)=>`<span class="${active.includes(i)?'on':''}">${d}</span>`).join('');
 }
+function publicProfessionalDayList(shop,barber){
+  if(shop&&shop.dayHours)return DOW.map((d,i)=>`<span class="${shopDayHours(shop,i).active?'on':''}">${d}</span>`).join('');
+  return publicDayList(barber&&barber.days);
+}
+function publicDayHoursList(shop){
+  if(!shop||!shop.dayHours)return `<div class="pub-days">${publicDayList(shop&&shop.workDays)}</div>`;
+  return `<div class="pub-day-hours">${DOW.map((d,i)=>{
+    const cfg=shopDayHours(shop,i);
+    return `<span class="${cfg.active?'on':''}"><b>${d}</b> ${cfg.active?`${escapeHtml(cfg.start)}-${escapeHtml(cfg.end)}`:'Fechado'}</span>`;
+  }).join('')}</div>`;
+}
+function publicHoursSummary(shop){
+  if(!shop||!shop.dayHours)return `${escapeHtml(shop&&shop.open||'09:00')} - ${escapeHtml(shop&&shop.close||'19:00')}`;
+  const active=DOW.map((_,i)=>shopDayHours(shop,i)).filter(d=>d.active);
+  if(!active.length)return 'Fechado';
+  const first=active[0];
+  const same=active.every(d=>d.start===first.start&&d.end===first.end);
+  return same?`${escapeHtml(first.start)} - ${escapeHtml(first.end)}`:'Horários por dia';
+}
+const PUBLIC_BUSINESS_CATEGORIES={
+  'barbershop':'Barbearia','hair-salon':'Salão de cabelo','nail-designer':'Nail designer','lash-designer':'Lash designer',
+  'makeup-artist':'Maquiadora','beauty-clinic':'Clínica de estética','tattoo-studio':'Estúdio de tatuagem',
+  'massage-therapist':'Massoterapeuta','personal-trainer':'Personal trainer','nutritionist':'Nutricionista',
+  'physiotherapist':'Fisioterapeuta','dentist':'Dentista','photographer':'Fotógrafo','consultant':'Consultor','other':'Agendamento online'
+};
+function publicCategoryLabel(v){return PUBLIC_BUSINESS_CATEGORIES[v]||v||'Agendamento online';}
+function publicThemeSlug(v){return String(v||'ocean-blue').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'ocean-blue';}
+function applyPublicBusinessTheme(shop){document.documentElement.setAttribute('data-business-theme',publicThemeSlug(shop&&shop.themeId));}
 function renderPublic(r){
   let shop=DB.findBy('barbershops',s=>s.slug===r.slug);
   if(!shop&&window.__FB_ENABLED&&!window.fbLoadPublicShop&&(r._loaderWaitCount||0)<20){
@@ -85,8 +123,14 @@ function renderPublic(r){
     fbLoadPublicShop(r.slug).then(()=>{r._loaded=true;renderPublic(r);}).catch(()=>{r._loaded=true;renderPublic(r);});
     return;
   }
-  if(!shop){$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('search','Página não encontrada','O link pode estar incorreto.')}<button class="btn btn-primary" onclick="Router.go('#/')">Voltar ao início</button></div>`);return;}
+  if(!shop){document.documentElement.removeAttribute('data-business-theme');$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('search','Página não encontrada','O link pode estar incorreto.')}<button class="btn btn-primary" onclick="Router.go('#/')">Voltar ao início</button></div>`);return;}
+  applyPublicBusinessTheme(shop);
   if(shop.status==='suspended'){$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('alert','Página temporariamente indisponível','Esta empresa não está aceitando agendamentos no momento.')}</div>`,shop);return;}
+  if(shop.schedulePaused){$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('clock','Agenda pausada','Este negócio pausou temporariamente novos agendamentos. Tente novamente mais tarde.')}</div>`,shop);return;}
+  const _pubSub=shopSubscription(shop.id)||{};
+  const _pubSubStatus=_pubSub.billingStatus||_pubSub.status;
+  if(!subscriptionCourtesyActive(_pubSub)&&(_pubSubStatus==='past_due'||_pubSubStatus==='canceled')){$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('lock','Link indisponível no momento','Entre em contato com o estabelecimento.')}</div>`,shop);return;}
+  if(shopFreeBookingUsage(shop.id).locked){$('#root').innerHTML=publicShell(freeLimitMessage(shop),shop);return;}
 
   document.title=`${shop.name} - Agende online`;
   window.currentPublicShopId=shop.id;
@@ -94,11 +138,12 @@ function renderPublic(r){
 
   const services=DB.scope('services',shop.id).filter(s=>s.active);
   const barbers=DB.scope('barbers',shop.id).filter(b=>b.active);
-  const photos=publicPhotoUrls(shop,barbers);
   const mapQuery=[shop.address,shop.neighborhood,shop.city].filter(Boolean).join(', ');
   const mapsUrl=mapQuery?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`:'';
   const whatsappDigits=(shop.whatsapp||shop.phone||'').replace(/\D/g,'');
   const whatsappUrl=whatsappDigits?`https://wa.me/55${whatsappDigits}?text=${encodeURIComponent('Olá, '+shop.name+'! Quero agendar um horário.')}`:'';
+  const instaUrl=instagramUrl(shop.instagram);
+  const instaText=instagramDisplay(shop.instagram);
   const coverStyle=shop.coverUrl?` style="background-image:url('${escapeHtml(shop.coverUrl)}')"`:'';
 
   $('#root').innerHTML=publicShell(`
@@ -107,7 +152,7 @@ function renderPublic(r){
       <div class="container pub-hero-inner">
         <div class="pub-logo">${brandLogo(shop,'pub-logo-img')}</div>
         <div class="pub-title">
-          <span class="pub-kicker">${escapeHtml(shop.category||'Agendamento online')}</span>
+          <span class="pub-kicker">${escapeHtml(publicCategoryLabel(shop.category))}</span>
           <h1>${escapeHtml(shop.name)}</h1>
           <p>${escapeHtml(shop.description||'Agende seu horário online com praticidade.')}</p>
           <div class="pub-actions">
@@ -119,17 +164,11 @@ function renderPublic(r){
     </section>
     <div class="container pub-page">
       <section class="pub-info-grid">
-        <div class="pub-info-card"><b>${icon('clock')} Horários</b><strong>${escapeHtml(shop.open||'09:00')} - ${escapeHtml(shop.close||'19:00')}</strong><div class="pub-days">${publicDayList(shop.workDays)}</div></div>
+        <div class="pub-info-card"><b>${icon('clock')} Horários</b><strong>${publicHoursSummary(shop)}</strong>${publicDayHoursList(shop)}</div>
         ${shop.address?`<div class="pub-info-card"><b>${icon('mapPin')} Endereço</b><strong>${escapeHtml(shop.address)}</strong>${mapsUrl?`<a href="${mapsUrl}" target="_blank" rel="noopener">Abrir no Maps</a>`:''}</div>`:''}
-        ${shop.instagram?`<div class="pub-info-card"><b>${icon('instagram')} Instagram</b><strong>${escapeHtml(shop.instagram)}</strong></div>`:''}
+        ${instaUrl?`<a class="pub-info-card" href="${instaUrl}" target="_blank" rel="noopener"><b>${icon('instagram')} Instagram</b><strong>${escapeHtml(instaText)}</strong><span>Abrir no Instagram</span></a>`:''}
         ${shop.whatsapp||shop.phone?`<div class="pub-info-card"><b>${icon('phone')} Contato</b><strong>${escapeHtml(shop.whatsapp||shop.phone)}</strong>${whatsappUrl?`<a href="${whatsappUrl}" target="_blank" rel="noopener">Chamar no WhatsApp</a>`:''}</div>`:''}
       </section>
-
-      ${photos.length?`<section class="pub-section">
-        <div class="pub-section-head"><h2>Fotos</h2></div>
-        <div class="pub-photo-grid">${photos.map((url,i)=>`<div class="pub-photo ${i===0?'wide':''}" style="background-image:url('${escapeHtml(url)}')"></div>`).join('')}</div>
-      </section>`:''}
-
       <section class="pub-section">
         <div class="pub-section-head"><h2>Serviços</h2><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}')">Agendar</button></div>
         <div class="pub-service-grid">
@@ -140,7 +179,7 @@ function renderPublic(r){
       <section class="pub-section">
         <div class="pub-section-head"><h2>Profissionais</h2></div>
         <div class="pub-pro-grid">
-          ${barbers.length?barbers.map(b=>`<article class="pub-pro"><div class="pub-pro-photo">${imageOrInitials(b.photoUrl,b.name,'pub-pro-img')}</div><div><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.role||'Profissional')}</p><div class="pub-days">${publicDayList(b.days)}</div></div><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}',null,'${b.id}')">Agendar</button></article>`).join(''):emptyState('users','Sem profissionais ainda','A equipe ainda não foi publicada.')}
+          ${barbers.length?barbers.map(b=>`<article class="pub-pro"><div class="pub-pro-photo">${imageOrInitials(b.photoUrl,b.name,'pub-pro-img')}</div><div><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.role||'Profissional')}</p><div class="pub-days">${publicProfessionalDayList(shop,b)}</div></div><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}',null,'${b.id}')">Agendar</button></article>`).join(''):emptyState('users','Sem profissionais ainda','A equipe ainda não foi publicada.')}
         </div>
       </section>
 
@@ -157,7 +196,7 @@ function renderPublic(r){
 }
 function publicShell(inner,shop){
   const u=Session.user;
-  const brand=shop?`<div class="pub-nav-brand" onclick="Router.go('#/b/${escapeHtml(shop.slug)}')"><span class="pub-nav-logo">${brandLogo(shop,'pub-nav-logo-img')}</span><b>${escapeHtml(shop.name)}</b></div>`:`<div class="pub-nav-brand" onclick="Router.go('#/')"><span class="logo">${icon('scissors')}</span><b>Groomin</b></div>`;
+  const brand=shop?`<div class="pub-nav-brand" onclick="Router.go('#/b/${escapeHtml(shop.slug)}')"><span class="pub-nav-logo">${brandLogo(shop,'pub-nav-logo-img')}</span><b>${escapeHtml(shop.name)}</b></div>`:`<div class="pub-nav-brand" onclick="Router.go('#/')"><span class="logo">${GROOMIN_LOGO}</span><b>Groomin</b></div>`;
   return `<header class="pub-topbar"><div class="container pub-topbar-inner">
     ${brand}
     <div class="pub-nav-actions">
@@ -173,6 +212,24 @@ function publicShell(inner,shop){
 let booking={};
 
 /* Booking flow V2: no login, no app install, WhatsApp-first confirmation */
+function shopFreeBookingUsage(shopId){
+  const shop=DB.find('barbershops',shopId);
+  if(subscriptionCourtesyActive(shopSubscription(shopId)))return {planId:'courtesy',limit:Infinity,used:0,remaining:Infinity,locked:false};
+  const planId=(shop&&shop.planId)||'';
+  const limit=planId==='free'?Number(shop.freeBookingLimit||3):Infinity;
+  const used=DB.scope('appointments',shopId).filter(a=>a.status!=='cancelado').length;
+  return {planId,limit,used,remaining:Number.isFinite(limit)?Math.max(0,limit-used):Infinity,locked:Number.isFinite(limit)&&used>=limit};
+}
+function freeLimitMessage(shop){
+  const usage=shopFreeBookingUsage(shop.id);
+  const u=Session&&Session.effectiveUser;
+  const isOwner=u&&u.barbershopId===shop.id&&(u.role==='owner'||u.role==='manager'||u.role==='superadmin');
+  if(isOwner){
+    return `<div class="container pub-empty">${emptyState('lock','Teste gratuito concluído',`Seu negócio já recebeu ${usage.used} agendamento(s) no teste gratuito. Para continuar recebendo novos horários, assine um plano do Groomin.`)}<button class="btn btn-primary" onclick="Router.go('#/dashboard/assinatura')">Ver planos</button></div>`;
+  }
+  const wa=bookingShopWhatsApp(shop);
+  return `<div class="container pub-empty">${emptyState('clock','Agenda temporariamente indisponível','Este negócio não está recebendo novos agendamentos online no momento. Tente novamente mais tarde ou entre em contato diretamente.')}${wa?`<a class="btn btn-primary" href="${waLink(wa,`Olá! Gostaria de agendar um horário com ${shop.name}.`)}" target="_blank" rel="noopener">${icon('whatsapp')} Chamar no WhatsApp</a>`:''}</div>`;
+}
 function bookingShopWhatsApp(shop){
   return (shop&&(shop.whatsapp||shop.phone)?(shop.whatsapp||shop.phone):'').replace(/\D/g,'');
 }
@@ -180,6 +237,9 @@ function bookingWhatsAppMessage(shop,svc,barber,code){
   return encodeURIComponent(`Olá, ${shop.name}! Acabei de fazer um agendamento:\n\nServiço: ${svc.name}\nProfissional: ${barber?barber.name:'A definir'}\nData: ${fmtDate(booking.date)}\nHorário: ${booking.time}\nNome: ${booking.name}\nWhatsApp: ${booking.phone}${code?`\nCódigo: #${code}`:''}\n\nPode confirmar por aqui?`);
 }
 function startBooking(shopId,serviceId,barberId){
+  const shop=DB.find('barbershops',shopId);
+  if(shop&&shop.schedulePaused){toast('Agenda pausada. Novos agendamentos estão indisponíveis no momento.','info');return;}
+  if(shop&&shopFreeBookingUsage(shopId).locked){toast('Agenda temporariamente indisponível para novos agendamentos online.','info');return;}
   booking={shopId,service:serviceId||null,barber:barberId||null,date:null,time:null,assignedBarber:null,name:'',phone:'',email:'',birthday:'',step:serviceId?2:1};
   renderBooking();
 }
@@ -199,15 +259,17 @@ function renderBookingStep(){
     const barbers=DB.scope('barbers',shopId).filter(b=>b.active);
     c.innerHTML=`<h4>Escolha o profissional</h4><div class="select-grid booking-select-grid">
       <button class="select-item ${booking.barber==='any'?'sel':''}" onclick="pickBarber('any')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${icon('users')}</div></div><div><div class="t">Qualquer profissional</div><div class="d">Primeiro horário disponível</div></div></div></button>
-      ${barbers.map(b=>`<button class="select-item ${booking.barber===b.id?'sel':''}" onclick="pickBarber('${b.id}')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${imageOrInitials(b.photoUrl,b.name,'mini-avatar-img')}</div></div><div><div class="t">${escapeHtml(b.name)}</div><div class="d">${escapeHtml(b.role||'Profissional')}</div><div class="barber-days compact">${DOW.map((d,i)=>`<span class="${(b.days||[]).includes(i)?'day on':'day'}">${d}</span>`).join('')}</div></div></div></button>`).join('')}</div>
+      ${barbers.map(b=>`<button class="select-item ${booking.barber===b.id?'sel':''}" onclick="pickBarber('${b.id}')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${imageOrInitials(b.photoUrl,b.name,'mini-avatar-img')}</div></div><div><div class="t">${escapeHtml(b.name)}</div><div class="d">${escapeHtml(b.role||'Profissional')}</div><div class="barber-days compact">${DOW.map((d,i)=>`<span class="${(DB.find('barbershops',shopId).dayHours?shopDayHours(DB.find('barbershops',shopId),i).active:(b.days||[]).includes(i))?'day on':'day'}">${d}</span>`).join('')}</div></div></div></button>`).join('')}</div>
       <div class="booking-mobile-actions"><button class="btn btn-ghost" onclick="bookGo(1)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===3){
-    const dates=[];for(let i=0;i<14;i++)dates.push(DB.addDays(DB.todayISO(),i));
     const svc=DB.find('services',booking.service);
+    if(!svc){toast('Serviço não disponível. Escolha outro.','err');booking.step=1;renderBooking();return;}
+    const dates=[];for(let i=0;i<14;i++)dates.push(DB.addDays(DB.todayISO(),i));
     c.innerHTML=`<h4>Escolha a data</h4><div class="date-strip booking-date-strip">${dates.map(dt=>{const day=new Date(dt+'T00:00:00');const works=booking.barber==='any'?anySlots(shopId,dt,svc.duration).some(s=>s.available):barberSlots(shopId,booking.barber,dt,svc.duration).some(s=>s.available);return `<button class="date-pill ${booking.date===dt?'sel':''}" ${works?'':'disabled'} onclick="pickDate('${dt}')"><div class="dow">${DOW[day.getDay()]}</div><div class="dnum">${day.getDate()}</div><div class="mon">${MON[day.getMonth()]}</div></button>`;}).join('')}</div>
       <div class="booking-mobile-actions"><button class="btn btn-ghost" onclick="bookGo(2)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===4){
     const svc=DB.find('services',booking.service);
+    if(!svc){toast('Serviço não disponível. Escolha outro.','err');booking.step=1;renderBooking();return;}
     const slots=booking.barber==='any'?anySlots(shopId,booking.date,svc.duration):barberSlots(shopId,booking.barber,booking.date,svc.duration);
     c.innerHTML=`<h4>Escolha o horário</h4><p class="muted booking-help">${DOW_FULL[new Date(booking.date+'T00:00:00').getDay()]}, ${fmtDate(booking.date)}</p>
       ${slots.length?`<div class="slot-grid booking-slot-grid">${slots.map(s=>`<button class="slot ${booking.time===s.time?'sel':''}" ${s.available?'':'disabled'} onclick="pickTime('${s.time}','${s.barberId||''}')">${s.time}</button>`).join('')}</div>`:emptyState('clock','Sem horários','Não há horários livres nesta data.')}
@@ -278,12 +340,14 @@ function confirmBooking(){
   const shopId=booking.shopId,svc=DB.find('services',booking.service);
   const bid0=booking.barber==='any'?firstAvailableBarber(shopId,booking.date,booking.time,svc.duration):booking.barber;
   if(!bid0){toast('Horário indisponível. Escolha outro.','err');booking.step=4;renderBooking();return;}
+  if(shopFreeBookingUsage(shopId).locked){toast('Agenda temporariamente indisponível para novos agendamentos online.','err');closeModal();return;}
   const btn=$('#btn_confirm');if(btn){btn.disabled=true;btn.innerHTML=`${icon('clock')} Confirmando...`;}
   if(window.__FB_ENABLED){
     fbPublicBooking({tenantId:shopId,serviceId:svc.id,barberId:bid0,date:booking.date,time:booking.time,name:booking.name,phone:booking.phone,email:'',birthday:'',duration:svc.duration,price:svc.price,serviceName:svc.name,barberName:(DB.find('barbers',bid0)||{}).name||''})
       .then(res=>{
         const shop=DB.find('barbershops',shopId),barber=DB.find('barbers',bid0),code=String(res.appointmentId||'').slice(-6).toUpperCase();
         window._lastAppt={date:booking.date,time:booking.time,duration:svc.duration,serviceName:svc.name,barberName:barber?barber.name:'',shopName:shop?shop.name:'',shopAddress:shop?(shop.address||'')+(shop.city?', '+shop.city:''):''};
+        $('#overlay').classList.add('open');document.body.classList.add('locked');
         $('#modal').querySelector('.modal-body').innerHTML=bookingSuccessHtml(shop,svc,barber,code);
         toast('Horário reservado. Confirme pelo WhatsApp.','ok');
       })
@@ -299,6 +363,7 @@ function confirmBooking(){
   DB.insert('notifications',{barbershopId:shopId,type:booking._reschedule?'reschedule':'confirm',title:booking._reschedule?'Reagendamento':'Novo agendamento',msg:`${booking.name} - ${svc.name} ${fmtDateShort(booking.date)} ${booking.time}`,time:Date.now(),read:false});
   const shop=DB.find('barbershops',shopId),barber=DB.find('barbers',bid0),code=appt.id.slice(-6).toUpperCase();
   window._lastAppt={date:booking.date,time:booking.time,duration:svc.duration,serviceName:svc.name,barberName:barber?barber.name:'',shopName:shop?shop.name:'',shopAddress:shop?(shop.address||'')+(shop.city?', '+shop.city:''):''};
+  $('#overlay').classList.add('open');document.body.classList.add('locked');
   $('#modal').querySelector('.modal-body').innerHTML=bookingSuccessHtml(shop,svc,barber,code);
   toast('Horário reservado. Confirme pelo WhatsApp.','ok');
   if(window.refreshShell)refreshShell();
@@ -354,7 +419,7 @@ function openPublicCustomerLogin(shopId,initialTab,initialEmail){
       :`<div class="field"><label>Seu nome *</label><input class="input" id="pcl_name" placeholder="Nome completo"><div class="err">Informe seu nome.</div></div>
          <div class="field"><label>E-mail *</label><input class="input" id="pcl_email" placeholder="voce@email.com"><div class="err">E-mail inválido.</div></div>
          <div class="field"><label>WhatsApp</label><input class="input" id="pcl_phone" placeholder="(11) 9 0000-0000"></div>
-         <div class="field"><label>Data de nascimento *</label><input class="input" type="date" id="pcl_bday"><div class="err">Informe sua data de nascimento.</div><small class="muted">Ajuda a barbearia a enviar benefícios de aniversário.</small></div>
+         <div class="field"><label>Data de nascimento</label><input class="input" type="date" id="pcl_bday"><div class="err">Confira a data informada.</div><small class="muted">Opcional. Use apenas se quiser receber benefícios de aniversário.</small></div>
          <div class="field"><label>Senha *</label><input class="input" type="password" id="pcl_pass" placeholder="Mínimo 6 caracteres"><div class="err">Mínimo 6 caracteres.</div></div>
          <p style="font-size:13px;margin-top:10px" class="muted">Já tem conta? <a style="color:var(--primary);cursor:pointer" onclick="window._pclTab='login';pclRe()">Entrar →</a></p>`;
     const foot=tab==='login'
@@ -390,7 +455,7 @@ function pclSubmit(action,shopId){
   const birthday=($('#pcl_bday')||{}).value||'';
   let ok=true;
   const inv=(id,bad)=>{const el=$('#'+id);if(el)el.closest('.field').classList.toggle('invalid',bad);if(bad)ok=false;};
-  inv('pcl_name',name.length<2);inv('pcl_email',!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email));inv('pcl_bday',!birthday);inv('pcl_pass',pass.length<6);
+  inv('pcl_name',name.length<2);inv('pcl_email',!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email));inv('pcl_bday',!!birthday&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(birthday));inv('pcl_pass',pass.length<6);
   if(!ok){toast('Confira os campos destacados.','err');return;}
   if(window.__FB_ENABLED&&phone.replace(/\D/g,'').length<8){toast('Informe seu WhatsApp (mínimo 8 dígitos).','err');const el=$('#pcl_phone');if(el)el.focus();return;}
   if(window.__FB_ENABLED){
@@ -458,12 +523,14 @@ function renderCustomer(){
   const t=DB.todayISO();
   const all=DB.scope('appointments',u.barbershopId).filter(a=>a.customerId===u.customerId).sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
   const list=custTab==='proximos'?all.filter(a=>a.date>=t&&a.status!=='cancelado'&&a.status!=='concluido'):all;
+  const links=Array.isArray(u.customerLinks)?u.customerLinks:[];
+  const shopSelector=links.length>1?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${links.map(lk=>{const s=DB.find('barbershops',lk.tenantId);const active=lk.tenantId===u.barbershopId;return s?`<button class="btn btn-sm ${active?'btn-primary':'btn-ghost'}" onclick="switchCustShop('${lk.tenantId}')">${escapeHtml(s.name)}</button>`:'';}).join('')}</div>`:'';
   $('#root').innerHTML=`<header class="topbar"><div class="container inner">
     <div class="brand" onclick="Router.go('#/'+'${shop.slug}')"><span class="logo">${icon('scissors')}</span><span>${escapeHtml(shop.name)}<small>Área do cliente</small></span></div>
     <div class="nav-right"><button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
       <button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}')">${icon('plus')} Agendar</button>
       <button class="btn btn-ghost btn-sm" onclick="logoutTo('#/'+'${shop.slug}')">${icon('logout')} Sair</button></div>
-  </div></header>
+  </div>${shopSelector?`<div class="container inner" style="padding-top:0;padding-bottom:8px">${shopSelector}</div>`:''}</header>
   <main class="container" style="padding:30px 0 60px">
     <div class="page-head"><div><h2>Olá, ${escapeHtml(u.name.split(' ')[0])} 👋</h2><p>Gerencie seus horários na ${escapeHtml(shop.name)}</p></div></div>
     <div class="stat-grid">
@@ -480,7 +547,17 @@ function renderCustomer(){
     </div>
   </main>`;
 }
-function custCancel(id){confirmAction('Cancelar agendamento?','Você poderá agendar um novo horário quando quiser.',()=>{DB.update('appointments',id,{status:'cancelado'});const ap=DB.find('appointments',id);DB.insert('notifications',{barbershopId:ap.barbershopId,type:'cancel',title:'Cancelamento',msg:`${ap.customerName} cancelou ${fmtDateShort(ap.date)} ${ap.time}`,time:Date.now(),read:false});DB.log('Agendamento cancelado',ap.customerName,ap.barbershopId);toast('Agendamento cancelado.','info');renderCustomer();});}
+function custCancel(id){
+  const ap=DB.find('appointments',id);
+  if(!ap){toast('Agendamento não encontrado.','err');return;}
+  if(ap.date<DB.todayISO()){toast('Não é possível cancelar um agendamento passado.','err');return;}
+  confirmAction('Cancelar agendamento?','Você poderá agendar um novo horário quando quiser.',()=>{
+    DB.update('appointments',id,{status:'cancelado'});
+    DB.insert('notifications',{barbershopId:ap.barbershopId,type:'cancel',title:'Cancelamento',msg:`${ap.customerName} cancelou ${fmtDateShort(ap.date)} ${ap.time}`,time:Date.now(),read:false});
+    DB.log('Agendamento cancelado',ap.customerName,ap.barbershopId);
+    toast('Agendamento cancelado.','info');renderCustomer();
+  });
+}
 function custReschedule(id){const ap=DB.find('appointments',id);startBooking(ap.barbershopId,ap.serviceId,ap.barberId);booking._reschedule=id;booking.step=3;renderBooking();}
 function custEditProfile(){
   const u=Session.effectiveUser;const cust=DB.find('customers',u.customerId);
@@ -492,5 +569,20 @@ function custEditProfile(){
     <div class="field"><label>Aniversário</label><input class="input" type="date" id="cp_bday" value="${cust.birthday||''}"></div>
   </div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveCustProfile()">Salvar</button></div>`);
 }
-function saveCustProfile(){const u=Session.effectiveUser;DB.update('customers',u.customerId,{name:$('#cp_name').value.trim(),phone:$('#cp_phone').value.trim(),whatsapp:$('#cp_phone').value.trim(),email:$('#cp_email').value.trim(),birthday:$('#cp_bday').value});closeModal();toast('Perfil atualizado.','ok');renderCustomer();}
+function saveCustProfile(){
+  const u=Session.effectiveUser;
+  const name=$('#cp_name').value.trim();
+  const phone=$('#cp_phone').value.trim();
+  const email=$('#cp_email').value.trim();
+  if(name.length<2){toast('Nome precisa ter ao menos 2 caracteres.','err');return;}
+  if(phone.replace(/\D/g,'').length<8){toast('Informe um WhatsApp válido.','err');return;}
+  if(email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('E-mail inválido.','err');return;}
+  DB.update('customers',u.customerId,{name,phone,whatsapp:phone,email,birthday:$('#cp_bday').value});
+  closeModal();toast('Perfil atualizado.','ok');renderCustomer();
+}
+function switchCustShop(tenantId){
+  if(window.fbSwitchCustomerShop){
+    window.fbSwitchCustomerShop(tenantId).catch(e=>toast(e.message||'Erro ao trocar barbearia.','err'));
+  }
+}
 function logoutTo(hash){Session.logout();toast('Sessão encerrada.','info');location.hash=hash||'#/';}

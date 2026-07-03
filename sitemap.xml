@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://groomin.com.br/</loc>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://groomin.com.br/#/privacidade</loc>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://groomin.com.br/#/termos</loc>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://groomin.com.br/#/cookies</loc>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://groomin.com.br/#/lgpd</loc>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://groomin.com.br/#/contato</loc>
+    <priority>0.4</priority>
+  </url>
+</urlset>

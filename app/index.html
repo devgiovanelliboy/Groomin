@@ -1,25 +1,27 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-theme="dark">
+<html lang="pt-BR" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="description" content="Groomin — área de gestão para barbearias." />
-<meta name="theme-color" content="#0F0F0F" />
-<link rel="manifest" href="../manifest.webmanifest" />
-<link rel="icon" type="image/svg+xml" href="../icon.svg" />
-<link rel="apple-touch-icon" href="../assets/pwa/apple-touch-icon.png" />
+<meta name="robots" content="noindex,nofollow" />
+<meta name="theme-color" content="#F8FAFC" />
+<link rel="manifest" href="../manifest.webmanifest?v=20260703-logo" />
+<link rel="icon" type="image/png" sizes="48x48" href="../assets/pwa/favicon-48.png?v=20260703-logo" />
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/pwa/favicon-32.png?v=20260703-logo" />
+<link rel="apple-touch-icon" href="../assets/pwa/apple-touch-icon.png?v=20260703-logo" />
 <link rel="apple-touch-startup-image" href="../assets/pwa/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
 <link rel="apple-touch-startup-image" href="../assets/pwa/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
 <link rel="apple-touch-startup-image" href="../assets/pwa/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Groomin" />
 <title>Groomin — Área de Gestão</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="../styles.css" />
+<link rel="stylesheet" href="../styles.css?v=20260701-0100" />
 </head>
 <body>
 <div class="ambient"></div>
@@ -27,15 +29,23 @@
 <div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="../js/firebase-config.js"></script>
-<script src="../js/01-icons.js"></script>
-<script src="../js/02-data-core.js"></script>
-<script src="../js/03-analytics-landing.js"></script>
-<script src="../js/04-public-booking.js"></script>
-<script src="../js/05-admin.js"></script>
-<script src="../js/06-dashboard.js"></script>
-<script src="../js/09-pwa.js"></script>
-<script src="../js/firebase-adapter.js"></script>
-<script>if(window.Router&&location.hash)Router.render();</script>
+<script src="../js/firebase-config.js?v=20260701-0100"></script>
+<script src="../js/01-icons.js?v=20260701-0100"></script>
+<script src="../js/02-data-core.js?v=20260701-0100"></script>
+<script src="../js/03-analytics-landing.js?v=20260701-0100"></script>
+<script src="../js/04-public-booking.js?v=20260701-0100"></script>
+<script src="../js/05-admin.js?v=20260701-0100"></script>
+<script src="../js/06-dashboard.js?v=20260701-0100"></script>
+<script src="../js/09-pwa.js?v=20260701-0100"></script>
+<script src="../js/firebase-adapter.js?v=20260701-0100"></script>
+<script>
+if(window.Router){
+  if(!location.hash){
+    if(location.pathname.replace(/\/+$/,'')==='/admin')location.hash='#/admin';
+    else location.hash='#/login';
+  }
+  Router.render();
+}
+</script>
 </body>
 </html>

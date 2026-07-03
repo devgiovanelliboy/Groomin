@@ -11,32 +11,27 @@ const DB=(()=>{
   function seed(){
     const t=todayISO();
     const plans=[
-      {id:'free',name:'Grátis',price:0,interval:'mês',color:'muted',badge:'',tagline:'Para experimentar e validar a plataforma.',
-       limit_barbers:1,limit_appts:50,
-       features:['1 profissional','Página pública de agendamento','Agenda online','Até 50 agendamentos/mês'],
-       notIncluded:['Módulos avançados','Automações futuras','Recursos de gestão completos']},
-      {id:'growth',name:'Growth',price:69,interval:'mês',color:'info',badge:'',tagline:'Para publicar sua página e organizar os primeiros agendamentos.',
-       limit_barbers:3,limit_appts:99999,
-       features:['Até 3 profissionais','Agendamentos ilimitados','Página pública personalizada','Link para Instagram e WhatsApp','Horários por profissional','Configuração rápida']},
-      {id:'pro',name:'Pro',price:119,interval:'mês',color:'gold',badge:'Mais popular',tagline:'Para equipes que precisam de uma agenda online mais flexível.',
-       limit_barbers:8,limit_appts:99999,
-       features:['Até 8 profissionais','Tudo do Growth','Serviços e categorias ilimitados','Página pública com fotos','Bloqueios de agenda','Suporte prioritário']},
-      {id:'elite',name:'Elite',price:179,interval:'mês',color:'gold',badge:'Melhor custo',tagline:'Para operações com mais profissionais e volume de horários.',
+      {id:'free',name:'Teste gratuito',price:0,interval:'até 3 agendamentos',color:'muted',badge:'Sem cartão',tagline:'Para testar o Groomin sem cartão. Receba até 3 agendamentos e assine para continuar.',
+       limit_barbers:999,limit_appts:3,
+       features:['Página profissional de agendamentos','Link personalizado','Até 3 agendamentos recebidos','Cadastro de serviços','Cadastro de profissionais','Painel administrativo','Sem cartão de crédito']},
+      {id:'monthly',name:'Plano Mensal',price:14.90,interval:'mês',color:'info',badge:'',tagline:'Ideal para quem deseja começar sem compromisso.',
        limit_barbers:999,limit_appts:99999,
-       features:['Profissionais ilimitados','Tudo do Pro','Volume alto de agendamentos','Prioridade em novos recursos','Acompanhamento de implantação','Suporte prioritário']},
-      {id:'enterprise',name:'Enterprise',price:0,interval:'mês',color:'gold',badge:'Sob medida',enterprise:true,tagline:'Plano personalizado para sua operação.',
+       features:['Página profissional de agendamentos','Link personalizado','Agendamentos ilimitados','Cadastro de serviços','Cadastro de profissionais','Painel administrativo','Suporte','Atualizações contínuas']},
+      {id:'annual',name:'Plano Anual',price:151.98,monthlyEquivalent:12.66,interval:'ano',color:'gold',badge:'Mais escolhido',tagline:'Mais vantajoso para manter sua página profissional ativa o ano todo.',
        limit_barbers:999,limit_appts:99999,
-       features:['Preços e limites personalizados','Recursos liberados sob demanda','Atendimento dedicado']}
+       features:['Página profissional de agendamentos','Link personalizado','Agendamentos ilimitados','Cadastro de serviços','Cadastro de profissionais','Painel administrativo','Suporte','Atualizações contínuas']},
+      {id:'founder',name:'Cliente Fundador',price:990,interval:'pagamento único',color:'gold',badge:'Oferta exclusiva',founder:true,tagline:'Faça parte da história do Groomin. Uma oportunidade exclusiva para empresas que desejam apoiar o lançamento da plataforma e garantir benefícios únicos.',
+       limit_barbers:999,limit_appts:99999,
+       features:['Sem mensalidade enquanto o Groomin permanecer em operação','Todas as funcionalidades atuais do Groomin','Atualizações das funcionalidades atuais','Suporte prioritário','Prioridade para testar novos recursos','Canal direto com o fundador para sugestões','Badge exclusivo de Cliente Fundador','Desconto exclusivo em futuros módulos premium (quando houver)']}
     ];
     const billing={
       monthly:{label:'Mensal',discount:0,months:1},
-      quarterly:{label:'Trimestral',discount:0.10,months:3},
-      semiannual:{label:'Semestral',discount:0.15,months:6},
-      annual:{label:'Anual',discount:0.25,months:12}
+      annual:{label:'Anual',discount:0.15,months:12},
+      founder:{label:'Fundador',discount:0,months:0}
     };
     const barbershops=[
-      {id:'shop1',slug:'barbearia-do-joao',name:'Barbearia do João',ownerName:'João Almeida',description:'Tradição e estilo desde 2015. Cortes clássicos e modernos no coração da cidade.',address:'Rua dos Barbeiros, 123 — Centro',city:'São Paulo',neighborhood:'Centro',phone:'(11) 3333-1000',whatsapp:'(11) 99999-1000',email:'contato@barbeariadojoao.com',instagram:'@barbeariadojoao',open:'09:00',close:'20:00',lunchStart:'12:00',lunchEnd:'13:00',planId:'pro',status:'active',rating:4.9,createdAt:Date.now()-86400000*210,slotInterval:30},
-      {id:'shop2',slug:'barber-club',name:'Barber Club',ownerName:'Marcelo Dias',description:'Experiência premium de barbearia com ambiente lounge e drinks.',address:'Av. Paulista, 900 — Bela Vista',city:'São Paulo',neighborhood:'Bela Vista',phone:'(11) 3333-2000',whatsapp:'(11) 99999-2000',email:'hello@barberclub.com',instagram:'@barberclub',open:'10:00',close:'21:00',lunchStart:'13:00',lunchEnd:'14:00',planId:'enterprise',status:'active',rating:4.8,createdAt:Date.now()-86400000*120,slotInterval:30},
+      {id:'shop1',slug:'barbearia-do-joao',name:'Barbearia do João',ownerName:'João Almeida',description:'Tradição e estilo desde 2015. Cortes clássicos e modernos no coração da cidade.',address:'Rua dos Barbeiros, 123 — Centro',city:'São Paulo',neighborhood:'Centro',phone:'(11) 3333-1000',whatsapp:'(11) 99999-1000',email:'contato@barbeariadojoao.com',instagram:'@barbeariadojoao',open:'09:00',close:'20:00',lunchStart:'12:00',lunchEnd:'13:00',planId:'monthly',status:'active',rating:4.9,createdAt:Date.now()-86400000*210,slotInterval:30},
+      {id:'shop2',slug:'barber-club',name:'Barber Club',ownerName:'Marcelo Dias',description:'Experiência premium de barbearia com ambiente lounge e drinks.',address:'Av. Paulista, 900 — Bela Vista',city:'São Paulo',neighborhood:'Bela Vista',phone:'(11) 3333-2000',whatsapp:'(11) 99999-2000',email:'hello@barberclub.com',instagram:'@barberclub',open:'10:00',close:'21:00',lunchStart:'13:00',lunchEnd:'14:00',planId:'founder',status:'active',rating:4.8,createdAt:Date.now()-86400000*120,slotInterval:30},
       {id:'shop3',slug:'corte-nobre',name:'Corte Nobre',ownerName:'Rafael Souza',description:'Barbearia de bairro com atendimento de primeira.',address:'Rua das Acácias, 45',city:'Campinas',neighborhood:'Cambuí',phone:'(19) 3333-3000',whatsapp:'(19) 99999-3000',email:'corte@nobre.com',instagram:'@cortenobre',open:'09:00',close:'19:00',lunchStart:'12:00',lunchEnd:'13:00',planId:'free',status:'suspended',rating:4.6,createdAt:Date.now()-86400000*40,slotInterval:30}
     ];
     const users=[
@@ -130,11 +125,9 @@ const DB=(()=>{
       A('shop2','c6','Rodrigo Alves','(11) 93333-6666','s7','b5',addDays(t,-2),'11:00','concluido',80)
     ];
     const blocks=[]; // {id,barbershopId,barberId,date,start,end,reason,fullDay}
-    // Enterprise sob medida (limites/preços armazenados internamente na assinatura)
-    const enterpriseConfigs={
-      shop2:{monthly:249,annual:2241,limitBarbers:15,limitLocations:3,whatsappLimit:5000,ai:true,apiAccess:true,whiteLabel:true,mobileApp:true,advancedReports:true}
-    };
-    const planMonthlyOf=s=>{const c=enterpriseConfigs[s.id];if(c)return c.monthly;const p=plans.find(x=>x.id===s.planId);return p?p.price:0;};
+    // Planos personalizados legados ficam vazios no MVP.
+    const enterpriseConfigs={};
+    const planMonthlyOf=s=>{const c=enterpriseConfigs[s.id];if(c)return c.monthly;if(s.planId==='annual')return 12.66;if(s.planId==='founder')return 0;const p=plans.find(x=>x.id===s.planId);return p?p.price:0;};
     // subscriptions + invoices
     const subscriptions=barbershops.map(s=>({id:uid('sub'),barbershopId:s.id,planId:s.planId,status:s.status==='suspended'?'past_due':'active',mrr:planMonthlyOf(s),custom:enterpriseConfigs[s.id]||null,startedAt:s.createdAt,renewsAt:addDays(t,12)}));
     const invoices=[];
@@ -152,6 +145,7 @@ const DB=(()=>{
     ];
     const settings={
       featureFlags:{marketplace:false,whatsapp:true,aiInsights:false,onlinePayments:false,reviews:true},
+      publicPlans:{free:true,monthly:true,annual:true,founder:true},
       productModules:{crm:false,marketing:false,financial:false,inventory:false,ai:false,multiLocation:false,marketplace:false},
       emailTemplates:[
         {id:'et1',name:'Confirmação de Agendamento',subject:'Seu horário está confirmado!',active:true},
@@ -172,14 +166,19 @@ const DB=(()=>{
     ];
     // Com o Firebase ligado, NÃO semeia dados de demonstração: tudo vem da nuvem (Firestore).
     if(window.USE_FIREBASE===true){
-      return {plans,billing,settings,barbershops:[],users:[],barbers:[],services:[],customers:[],products:[],combos:[],sales:[],cashSessions:[],stockMoves:[],campaigns:[],reviews:[],appointments:[],blocks:[],subscriptions:[],invoices:[],auditLogs:[],notifications:[]};
+      return {plans,billing,settings,barbershops:[],users:[],barbers:[],services:[],customers:[],products:[],combos:[],sales:[],cashSessions:[],stockMoves:[],campaigns:[],reviews:[],appointments:[],blocks:[],subscriptions:[],invoices:[],auditLogs:[],adminActions:[],notifications:[]};
     }
-    return {plans,billing,barbershops,users,barbers,services,customers,products,combos,sales,cashSessions,stockMoves,campaigns,reviews,appointments,blocks,subscriptions,invoices,auditLogs,settings,notifications};
+    return {plans,billing,barbershops,users,barbers,services,customers,products,combos,sales,cashSessions,stockMoves,campaigns,reviews,appointments,blocks,subscriptions,invoices,auditLogs,adminActions:[],settings,notifications};
   }
 
+  const FIRESTORE_ONLY = window.USE_FIREBASE === true;
   let data;
-  function save(d){if(d)data=d;try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}}
-  function load(){try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r);}catch(e){}const s=seed();save(s);return s;}
+  function save(d){if(d)data=d;if(FIRESTORE_ONLY)return;try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}}
+  function load(){
+    if(FIRESTORE_ONLY){try{localStorage.removeItem(KEY);}catch(e){}return seed();}
+    try{const r=localStorage.getItem(KEY);if(r)return JSON.parse(r);}catch(e){}
+    const s=seed();save(s);return s;
+  }
   data=load();
 
   return {
@@ -190,9 +189,9 @@ const DB=(()=>{
     scope:(c,shopId)=>(data[c]||[]).filter(x=>x.barbershopId===shopId),
     find:(c,id)=>(data[c]||[]).find(x=>x.id===id),
     findBy:(c,fn)=>(data[c]||[]).find(fn),
-    insert:(c,obj)=>{obj.id=obj.id||uid();data[c].unshift(obj);save();if(window.__dbWrite)window.__dbWrite('insert',c,obj);return obj;},
-    update:(c,id,patch)=>{const i=data[c].findIndex(x=>x.id===id);if(i>-1){data[c][i]={...data[c][i],...patch};save();if(window.__dbWrite)window.__dbWrite('update',c,data[c][i]);return data[c][i];}},
-    remove:(c,id)=>{const obj=data[c].find(x=>x.id===id);data[c]=data[c].filter(x=>x.id!==id);save();if(window.__dbWrite&&obj)window.__dbWrite('remove',c,obj);},
+    insert:(c,obj)=>{if(!data[c])data[c]=[];obj.id=obj.id||uid();data[c].unshift(obj);save();if(window.__dbWrite)window.__dbWrite('insert',c,obj);return obj;},
+    update:(c,id,patch)=>{if(!data[c])return;const i=data[c].findIndex(x=>x.id===id);if(i>-1){data[c][i]={...data[c][i],...patch};save();if(window.__dbWrite)window.__dbWrite('update',c,data[c][i]);return data[c][i];}},
+    remove:(c,id)=>{if(!data[c])return;const obj=data[c].find(x=>x.id===id);data[c]=data[c].filter(x=>x.id!==id);save();if(window.__dbWrite&&obj)window.__dbWrite('remove',c,obj);},
     log:(action,target,shopId)=>{const u=Session.user;data.auditLogs.unshift({id:uid('lg'),time:Date.now(),actorName:u?u.name:'Sistema',role:u?u.role:'system',action,target:target||'',barbershopId:shopId||(u&&u.barbershopId)||null});save();}
   };
 })();
@@ -215,12 +214,23 @@ const imageOrInitials=(url,name,cls='')=>{
   return img?`<img class="${cls}" src="${escapeHtml(img)}" alt="${escapeHtml(name||'Imagem')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.classList.add('img-failed')"><span class="ini img-fallback">${initials(name)}</span>`:`<span class="ini">${initials(name)}</span>`;
 };
 const brandLogo=(shop,cls='')=>imageOrInitials(shop&&shop.logoUrl,shop&&shop.name,cls);
+const GROOMIN_LOGO='<img class="groomin-logo-img" src="/assets/pwa/logo-mark-192.png" alt="Groomin">';
 const escapeHtml=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function normalizeInstagram(v){
+  let s=String(v||'').trim();
+  if(!s)return '';
+  s=s.replace(/^https?:\/\/(www\.)?instagram\.com\//i,'').replace(/^instagram\.com\//i,'').split(/[?#]/)[0].replace(/^@/,'').replace(/\/+$/,'');
+  return s;
+}
+function instagramUrl(v){const u=normalizeInstagram(v);return u?`https://www.instagram.com/${encodeURIComponent(u)}/`:'';}
+function instagramDisplay(v){const u=normalizeInstagram(v);return u?`@${u}`:'';}
 const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DOW_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const MON=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-function fmtDate(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;}
-function fmtDateShort(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
+function tsToDate(v){if(!v)return null;if(typeof v==='number')return new Date(v);if(typeof v==='object'&&v.toDate)return v.toDate();const d=new Date(v+'T00:00:00');return isNaN(d)?null:d;}
+function fmtDate(iso){const d=tsToDate(iso);if(!d)return'';return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;}
+function tsToISO(v){const d=tsToDate(v);if(!d)return null;return d.toISOString().slice(0,10);}
+function fmtDateShort(iso){const d=tsToDate(iso);if(!d)return'';return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;}
 function relTime(ts){const s=(Date.now()-ts)/1000;if(s<60)return'agora';if(s<3600)return Math.floor(s/60)+'min';if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
 const STATUS={confirmado:{label:'Confirmado',cls:'ok'},pendente:{label:'Pendente',cls:'warn'},concluido:{label:'Concluído',cls:'info'},cancelado:{label:'Cancelado',cls:'danger'}};
 const timeToMin=t=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
@@ -245,7 +255,13 @@ function openModal(html,size=''){
   setTimeout(()=>{const f=m.querySelector('[data-autofocus],input,select,textarea,button:not(.close-x),a[href],[tabindex]:not([tabindex="-1"])');if(f)f.focus({preventScroll:true});},0);
 }
 function closeModal(){$('#overlay').classList.remove('open');document.body.classList.remove('locked');const m=$('#modal');m.removeAttribute('role');m.removeAttribute('aria-modal');}
-$('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeModal();});
+let overlayPointerStarted=false;
+$('#overlay').addEventListener('pointerdown',e=>{overlayPointerStarted=e.target&&e.target.id==='overlay';});
+$('#overlay').addEventListener('click',e=>{
+  const selected=window.getSelection?String(window.getSelection()||''):'';
+  if(e.target&&e.target.id==='overlay'&&overlayPointerStarted&&!selected.length)closeModal();
+  overlayPointerStarted=false;
+});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 function confirmAction(title,msg,onYes,danger=true){
   openModal(`<div class="modal-head"><h3>${escapeHtml(title)}</h3><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
@@ -253,9 +269,16 @@ function confirmAction(title,msg,onYes,danger=true){
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn ${danger?'btn-danger':'btn-primary'}" id="confirmYes">Confirmar</button></div>`);
   $('#confirmYes').addEventListener('click',()=>{closeModal();onYes();});
 }
+const _emptyActions={};let _emptyActionCounter=0;
 function emptyState(ic,title,sub,actionLabel,action){
-  return `<div class="empty"><div class="ei">${icon(ic)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(sub)}</p>${actionLabel&&action?`<button class="btn btn-primary btn-sm" onclick="${action}">${escapeHtml(actionLabel)}</button>`:''}</div>`;
+  if(actionLabel&&action){
+    const key='ea'+(++_emptyActionCounter);
+    _emptyActions[key]=action;
+    return `<div class="empty"><div class="ei">${icon(ic)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(sub)}</p><button class="btn btn-primary btn-sm" data-ea="${key}">${escapeHtml(actionLabel)}</button></div>`;
+  }
+  return `<div class="empty"><div class="ei">${icon(ic)}</div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(sub)}</p></div>`;
 }
+document.addEventListener('click',e=>{const btn=e.target.closest('[data-ea]');if(!btn)return;const fn=_emptyActions[btn.dataset.ea];if(typeof fn==='function')fn();else if(typeof fn==='string')Function(fn)();});
 function statCard(c,ic,lbl,val,delta,dir){return `<div class="stat"><div class="si ${c}">${icon(ic)}</div><div class="lbl">${escapeHtml(lbl)}</div><div class="val">${val}</div>${delta?`<div class="delta ${dir||'up'}">${icon(dir==='down'?'down':'trending')} ${escapeHtml(delta)}</div>`:''}</div>`;}
 
 /* ============================================================
@@ -289,7 +312,7 @@ function homeRouteFor(role){return ({super_admin:'#/admin',owner:'#/dashboard',m
    Future modules stay in code, hidden until explicitly enabled.
    ============================================================ */
 const PRODUCT_MODULES={
-  '':{stage:'mvp',area:'core',label:'Dashboard'},
+  '':{stage:'mvp',area:'core',label:'Painel'},
   agenda:{stage:'mvp',area:'booking',label:'Agenda'},
   servicos:{stage:'mvp',area:'booking',label:'Serviços'},
   barbeiros:{stage:'mvp',area:'booking',label:'Profissionais'},
@@ -300,7 +323,7 @@ const PRODUCT_MODULES={
   financeiro:{stage:'future',area:'financial',label:'Financeiro'},
   comissoes:{stage:'future',area:'financial',label:'Comissões'},
   pdv:{stage:'future',area:'financial',label:'PDV / Caixa'},
-  estoque:{stage:'future',area:'inventory',label:'Estoque'},
+  estoque:{stage:'mvp',area:'inventory',label:'Produtos'},
   combos:{stage:'future',area:'inventory',label:'Combos & Pacotes'},
   ia:{stage:'future',area:'ai',label:'Insights de IA'},
   marketplace:{stage:'future',area:'marketplace',label:'Marketplace'},
@@ -314,6 +337,19 @@ function productModuleEnabled(id){
   const s=(DB.get().settings||{});
   const flags=s.productModules||s.futureModules||{};
   return flags[key]===true||flags[mod.area]===true;
+}
+function platformPublicPlans(){
+  const s=(DB.get().settings||{});
+  if(!s.publicPlans)s.publicPlans={free:true,monthly:true,annual:true,founder:true};
+  ['free','monthly','annual','founder'].forEach(id=>{if(typeof s.publicPlans[id]==='undefined')s.publicPlans[id]=true;});
+  return s.publicPlans;
+}
+function planAvailableForSale(id){
+  if(id==='trial'||id==='free')return platformPublicPlans().free!==false;
+  return platformPublicPlans()[id]!==false;
+}
+function paidPlansForSale(){
+  return DB.all('plans').filter(p=>['monthly','annual','founder'].includes(p.id)&&planAvailableForSale(p.id));
 }
 function futureModuleLabel(id){return (PRODUCT_MODULES[id||'']||{}).label||'Este módulo';}
 function futureModulePage(id){
@@ -359,30 +395,35 @@ const Router={
     const first=seg[0];
     if(first==='login')return {route:'login'};
     if(first==='signup')return {route:'signup'};
+    if(first==='verify-email')return {route:'verify-email'};
     if(first==='admin')return {route:'admin',sub:seg[1]};
     if(first==='dashboard')return {route:'dashboard',sub:seg[1]};
     if(first==='my-schedule')return {route:'my-schedule',sub:seg[1]};
     if(first==='my-appointments')return {route:'my-appointments'};
     if(first==='find-barbershops')return {route:'marketplace'};
+    if(first==='stripe')return {route:'stripe-return',sub:(seg[1]||'success').split('?')[0]};
+    if(['privacidade','termos','cookies','lgpd','contato','suporte'].includes(first))return {route:'legal',page:first};
     if(first==='b')return {route:'public',slug:seg[1]};
     return {route:'public',slug:first}; // platform.com/<slug>
   },
   go(path){if(location.hash===path)Router.render();else location.hash=path;},
-  render(){
+  render(opts){
+    opts=opts||{};
     const r=Router.parse();
     const u=Session.effectiveUser;
-    closeModal();
+    if(!opts.preserveUi)closeModal();
     // guards
     if(r.route==='admin'&&!can('view_admin')){return needAuth('#/admin');}
     if(r.route==='dashboard'&&!can('view_dashboard')){return needAuth('#/dashboard');}
+    if((r.route==='dashboard'||r.route==='admin')&&Session.user&&Session.user.role!=='super_admin'&&!Session.user.emailVerified&&!Session.user.barbershopId){Router.go('#/verify-email');return;}
     if(r.route==='my-schedule'&&!(u&&u.role==='barber')){return needAuth('#/my-schedule');}
     if(r.route==='my-appointments'&&!(u&&u.role==='customer')){return needAuth('#/my-appointments');}
     if(r.route==='marketplace'&&!productModuleEnabled('marketplace')){location.hash='#/';return;}
-    const map={landing:'renderLanding',login:'renderLogin',signup:'renderSignup',admin:'renderAdmin',dashboard:'renderDashboard','my-schedule':'renderBarber','my-appointments':'renderCustomer',public:'renderPublic',marketplace:'renderMarketplace'};
+    const map={landing:'renderLanding',login:'renderLogin',signup:'renderSignup','verify-email':'renderEmailVerification',admin:'renderAdmin',dashboard:'renderDashboard','my-schedule':'renderBarber','my-appointments':'renderCustomer',public:'renderPublic',marketplace:'renderMarketplace',legal:'renderLegalPage','stripe-return':'renderStripeReturn'};
     const fn=window[map[r.route]];
     if(typeof fn==='function')fn(r);
     else $('#root').innerHTML=`<div class="container" style="padding:80px 0;text-align:center"><h2>Carregando…</h2></div>`;
-    window.scrollTo(0,0);
+    if(!opts.preserveScroll)window.scrollTo(0,0);
   }
 };
 function needAuth(intended){
@@ -393,5 +434,6 @@ function needAuth(intended){
 window.addEventListener('hashchange',()=>Router.render());
 function applyThemeIcons(){const t=document.documentElement.getAttribute('data-theme');$$('[data-theme-ic]').forEach(b=>{if(!b.innerHTML.trim())b.innerHTML=icon(t==='dark'?'moon':'sun');});}
 const _coreRender=Router.render.bind(Router);
-Router.render=function(){_coreRender();applyThemeIcons();};
+Router.render=function(opts){_coreRender(opts);applyThemeIcons();};
+window.Router=Router;
 window.refreshShell=function(){Router.render();};

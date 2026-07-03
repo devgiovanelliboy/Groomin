@@ -3,16 +3,19 @@
    (SW só registra em https/localhost; em file:// é ignorado)
    ============================================================ */
 (function(){
+  const APP_VERSION='20260701-0100';
+  const UPDATE_KEY='groomin_auto_update_'+APP_VERSION;
   const canSW = 'serviceWorker' in navigator &&
     (location.protocol==='https:' || ['localhost','127.0.0.1','[::1]'].includes(location.hostname));
   if(canSW){
     window.addEventListener('load',()=>{
       navigator.serviceWorker.register('/sw.js').then(reg=>{
+        try{reg.update().catch(()=>{});}catch(e){}
         reg.addEventListener('updatefound',()=>{
           const nw=reg.installing;if(!nw)return;
           nw.addEventListener('statechange',()=>{
             if(nw.state==='installed'&&navigator.serviceWorker.controller){
-              showUpdateBanner();
+              autoUpdateOnce();
             }
           });
         });
@@ -20,10 +23,13 @@
         try{ if('sync' in reg){ reg.sync.register('groomin-sync').catch(()=>{}); } }catch(e){}
       }).catch(()=>{});
     });
-    // SW pede refresh (sync/periodicsync) -> revalida a tela; SW_UPDATED -> banner
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      autoUpdateOnce();
+    });
+    // SW pede refresh (sync/periodicsync) -> revalida a tela; SW_UPDATED -> atualiza sem intervenção manual
     navigator.serviceWorker.addEventListener('message',(ev)=>{
       if(!ev.data)return;
-      if(ev.data.type==='SW_UPDATED'){showUpdateBanner();return;}
+      if(ev.data.type==='SW_UPDATED'){autoUpdateOnce();return;}
       if((ev.data.type==='SYNC'||ev.data.type==='REFRESH')&&window.Router&&location.hash){Router.render();}
     });
   }
@@ -62,7 +68,28 @@
     const b=document.createElement('div');
     b.id='pwaUpdate';
     b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:300;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;gap:12px;font-size:.9rem;font-weight:500;box-shadow:0 -2px 12px rgba(0,0,0,.3)';
-    b.innerHTML=`<span>${icon('refresh')} Nova versão do Groomin disponível.</span><button onclick="location.reload()" style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar agora</button>`;
+    b.innerHTML=`<span>${icon('refresh')} Nova versão do Groomin disponível.</span><button onclick="groomHardReload()" style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar agora</button>`;
     document.body.appendChild(b);
   }
+  function autoUpdateOnce(){
+    if(document.querySelector('.onboarding-modal')||location.hash==='#/signup'){
+      showUpdateBanner();
+      return;
+    }
+    try{
+      if(sessionStorage.getItem(UPDATE_KEY))return;
+      sessionStorage.setItem(UPDATE_KEY,'1');
+    }catch(e){}
+    setTimeout(()=>window.groomHardReload&&window.groomHardReload(),180);
+  }
+  window.groomHardReload=async function(){
+    try{if('caches' in window){const keys=await caches.keys();await Promise.all(keys.map(k=>caches.delete(k)));}}catch(e){}
+    try{
+      if('serviceWorker' in navigator){
+        const regs=await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r=>r.unregister()));
+      }
+    }catch(e){}
+    location.reload();
+  };
 })();

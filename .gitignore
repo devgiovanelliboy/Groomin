@@ -3,3 +3,14 @@ node_modules/
 *.log
 .env
 .env.local
+functions/.env.local
+functions/.secret.local
+functions/service-account.json
+
+# Artefatos de teste (Playwright)
+test-results/
+playwright-report/
+*.tmp.js
+
+# Config local do Claude Code (contém permissões/tokens da máquina)
+.claude/

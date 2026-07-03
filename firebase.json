@@ -11,7 +11,12 @@
       ".firebase/**",
       "**/node_modules/**",
       "functions/**",
+      "tests/**",
       "test-results/**",
+      "playwright-report/**",
+      "playwright.config.js",
+      "package.json",
+      "package-lock.json",
       "*.rules",
       "firestore.indexes.json",
       "*.md",
@@ -21,6 +26,8 @@
     "trailingSlash": false,
     "rewrites": [
       { "source": "/auth/action", "destination": "/auth-action.html" },
+      { "source": "/admin", "destination": "/app/index.html" },
+      { "source": "/admin/**", "destination": "/app/index.html" },
       { "source": "/app", "destination": "/app/index.html" },
       { "source": "/app/**", "destination": "/app/index.html" },
       { "source": "**", "destination": "/index.html" }
@@ -52,9 +59,51 @@
         ]
       },
       {
+        "glob": "/app",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "glob": "/app/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "glob": "/admin",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
+        "glob": "/admin/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        ]
+      },
+      {
         "glob": "**/*.@(png|jpg|jpeg|webp|woff2)",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        ]
+      },
+      {
+        "glob": "/app/**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+        ]
+      },
+      {
+        "glob": "/admin/**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+        ]
+      },
+      {
+        "glob": "/admin",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
         ]
       },
       {
@@ -63,7 +112,10 @@
           { "key": "X-Content-Type-Options", "value": "nosniff" },
           { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
           { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-          { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" }
+          { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), camera=()" },
+          { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
+          { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
+          { "key": "Content-Security-Policy", "value": "default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://www.google.com https://apis.google.com https://www.recaptcha.net https://*.googleapis.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' https://www.google.com https://www.recaptcha.net https://*.googleapis.com https://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net https://*.run.app wss://*.firebaseio.com http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" }
         ]
       }
     ]

@@ -1,0 +1,26 @@
+{
+  "name": "barbearia",
+  "version": "1.0.0",
+  "description": "",
+  "main": "sw.js",
+  "scripts": {
+    "test": "npm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devgiovanelliboy/Groomin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/devgiovanelliboy/Groomin/issues"
+  },
+  "homepage": "https://github.com/devgiovanelliboy/Groomin#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}

@@ -8,7 +8,7 @@ function renderMarketplace(){
   const q=mktQuery.toLowerCase();
   const filtered=shops.filter(s=>!q||[s.name,s.city,s.neighborhood,s.description].join(' ').toLowerCase().includes(q)||DB.scope('services',s.id).some(sv=>sv.name.toLowerCase().includes(q)));
   $('#root').innerHTML=`<header class="topbar"><div class="container inner">
-    <div class="brand" onclick="Router.go('#/')"><span class="logo">${icon('scissors')}</span><span>Groomin<small>Encontrar barbearia</small></span></div>
+    <div class="brand" onclick="Router.go('#/')"><span class="logo">${GROOMIN_LOGO}</span><span>Groomin<small>Encontrar barbearia</small></span></div>
     <div class="nav-right"><button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button><button class="btn btn-ghost btn-sm" onclick="Router.go('#/')">Início</button></div>
   </div></header>
   <main class="container" style="padding:36px 0 60px">
