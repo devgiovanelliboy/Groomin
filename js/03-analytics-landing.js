@@ -1074,6 +1074,8 @@ function onbApplyCategoryDefaults(id,force){
 }
 function onbSerializableDraft(){
   const {logoFile,coverFile,pass,emailVerified,...draft}=onbData||{};
+  // File não serializa: profissionais guardam só o nome do arquivo no draft
+  if(Array.isArray(draft.professionals))draft.professionals=draft.professionals.map(({photoFile,...p})=>p);
   return {...draft,logoFileName:logoFile&&logoFile.name||onbData.logoFileName||'',coverFileName:coverFile&&coverFile.name||onbData.coverFileName||''};
 }
 function onbSaveDraft(){
@@ -1169,7 +1171,7 @@ function renderOnbStep(){
     return `<div class="card" style="padding:24px;text-align:center;background:linear-gradient(135deg,rgba(124,58,237,.10),transparent),var(--surface-2)">
       <div class="ei" style="background:var(--primary-soft);color:var(--primary);margin:0 auto 16px">${icon('rocket')}</div>
       <h3 style="font-size:22px;margin-bottom:6px">Publicar página</h3>
-      <p class="muted" style="max-width:420px;margin:0 auto 18px">Tudo será salvo no Firestore com uma experiência inicial pensada para ${escapeHtml(c.label.toLowerCase())}.</p>
+      <p class="muted" style="max-width:420px;margin:0 auto 18px">Seu site ficará no ar em segundos, com uma experiência inicial pensada para ${escapeHtml(c.label.toLowerCase())}.</p>
       <div class="input" style="background:var(--surface-3);color:var(--primary);font-weight:800;text-align:center;margin-bottom:14px">${escapeHtml(onbPublicBase()+onbData.shopSlug)}</div>
       <div class="card" style="padding:16px;text-align:left;max-width:420px;margin:0 auto">
         <div class="summary-line"><span class="muted">Negócio</span><b>${escapeHtml(onbData.shopName||'')}</b></div>
@@ -1325,13 +1327,22 @@ function onbListEditor(key,title,subtitle,formFn){
     </div>
     ${window[formFn]()}
     <div class="onb-editor-list" id="onb_${key}_list">
-      ${list.map((item,i)=>`<div class="mini-slot"><span class="ic">${icon(isService?'scissors':'user')}</span><div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(isService?`${item.duration} min · ${money(item.price)}`:(item.role||'Profissional'))}</small></div><button class="ra del" title="Remover" onclick="onbRemove('${key}',${i})">${icon('trash')}</button></div>`).join('')||emptyState(isService?'scissors':'users',isService?'Nenhum serviço':'Nenhum profissional',isService?'Adicione o primeiro serviço acima.':'Adicione quem atende acima.')}
+      ${list.map((item,i)=>`<div class="mini-slot"><span class="ic">${icon(isService?'scissors':'user')}</span><div><b>${escapeHtml(item.name)}</b><br><small>${escapeHtml(isService?`${item.duration} min · ${money(item.price)}`:(item.role||'Profissional')+(item.photoFile?' · com foto':''))}</small></div><button class="ra del" title="Remover" onclick="onbRemove('${key}',${i})">${icon('trash')}</button></div>`).join('')||emptyState(isService?'scissors':'users',isService?'Nenhum serviço':'Nenhum profissional',isService?'Adicione o primeiro serviço acima.':'Adicione quem atende acima.')}
     </div>
   </section>`;
 }
-function onbProfessionalForm(){const c=onbCategory(onbData.category);return `<div class="onb-inline-form"><div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="onb_prof_name" placeholder="Ex.: nome do profissional"></div><div class="field"><label>Função</label><input class="input" id="onb_prof_role" placeholder="${escapeHtml(c.role)}"></div></div><button class="btn btn-primary btn-sm" type="button" onclick="onbAddProfessional()">${icon('plus')} Adicionar profissional</button></div>`;}
+function onbProfessionalForm(){const c=onbCategory(onbData.category);return `<div class="onb-inline-form"><div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="onb_prof_name" placeholder="Ex.: nome do profissional"></div><div class="field"><label>Função</label><input class="input" id="onb_prof_role" placeholder="${escapeHtml(c.role)}"></div></div>
+  <div class="field"><label>Foto (opcional)</label>
+    <input type="file" id="onb_prof_photo" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="onbProfPhotoPicked(this)">
+    <button class="onb-file-picker" id="onb_prof_photo_btn" type="button" onclick="document.getElementById('onb_prof_photo').click()">
+      <span class="onb-file-icon">${icon('file')}</span>
+      <span class="onb-file-copy"><b>Escolher foto</b><small id="onb_prof_photo_name">Aparece na sua página pública · máx. 5MB</small></span>
+    </button>
+  </div>
+  <button class="btn btn-primary btn-sm" type="button" onclick="onbAddProfessional()">${icon('plus')} Adicionar profissional</button></div>`;}
+function onbProfPhotoPicked(input){const f=input.files[0];const nm=$('#onb_prof_photo_name');const btn=$('#onb_prof_photo_btn');if(f&&f.size>5*1024*1024){toast('A foto precisa ter no máximo 5MB.','err');input.value='';if(nm)nm.textContent='Aparece na sua página pública · máx. 5MB';if(btn)btn.classList.remove('has-file');return;}if(nm)nm.textContent=f?f.name:'Aparece na sua página pública · máx. 5MB';if(btn)btn.classList.toggle('has-file',!!f);}
 function onbServiceForm(){const c=onbCategory(onbData.category),s=(c.services&&c.services[0])||['Atendimento',100,60];return `<div class="onb-inline-form"><div class="field"><label>Nome do serviço *</label><input class="input" id="onb_svc_name" placeholder="Ex.: ${escapeHtml(s[0])}"></div><div class="form-row"><div class="field"><label>Duração em minutos</label><input class="input" type="number" id="onb_svc_duration" value="${s[2]}" min="5"></div><div class="field"><label>Preço em R$</label><input class="input" type="number" id="onb_svc_price" value="${s[1]}" min="0"></div></div><button class="btn btn-primary btn-sm" type="button" onclick="onbAddService()">${icon('plus')} Adicionar serviço</button></div>`;}
-function onbAddProfessional(){onbPersistBusinessDraft();const name=$('#onb_prof_name').value.trim();if(name.length<2){toast('Informe o nome do profissional.','err');return;}onbData.professionals=onbData.professionals||[];onbData.professionals.push({name,role:$('#onb_prof_role').value.trim()||onbCategory(onbData.category).role||'Profissional'});onbSaveDraft();onbRefreshContent();}
+function onbAddProfessional(){onbPersistBusinessDraft();const name=$('#onb_prof_name').value.trim();if(name.length<2){toast('Informe o nome do profissional.','err');return;}const photoFile=($('#onb_prof_photo')&&$('#onb_prof_photo').files[0])||null;onbData.professionals=onbData.professionals||[];onbData.professionals.push({name,role:$('#onb_prof_role').value.trim()||onbCategory(onbData.category).role||'Profissional',photoFile,photoFileName:photoFile?photoFile.name:''});onbSaveDraft();onbRefreshContent();}
 function onbAddService(){onbPersistBusinessDraft();const name=$('#onb_svc_name').value.trim();if(name.length<2){toast('Informe o nome do serviço.','err');return;}onbData.services=onbData.services||[];onbData.services.push({name,duration:+$('#onb_svc_duration').value||30,price:+$('#onb_svc_price').value||0,category:onbData.category==='food'?'Produtos':'Serviços'});onbSaveDraft();onbRefreshContent();}
 function onbRemove(key,i){onbPersistBusinessDraft();onbData[key].splice(i,1);onbSaveDraft();onbRefreshContent();}
 function onbCollectBusinessInfo(){
@@ -1481,7 +1492,7 @@ function submitOnboarding(){
   if(!setupFn){toast('Serviço indisponível. Recarregue a página.','err');return;}
   if(onbData.planId!=='trial'&&!onbData.paymentStarted){toast('Antes de publicar, cadastre o cartão ou conclua o pagamento pelo Stripe.','err');onbStep=4;onbRefreshContent();return;}
   const btn=$('#onb_submit');const origBtnHTML=btn?btn.innerHTML:null;
-  if(btn){btn.disabled=true;btn.innerHTML='Publicando no Firestore...';}
+  if(btn){btn.disabled=true;btn.innerHTML='Publicando seu site...';}
   setupFn({shopName:onbData.shopName,ownerName:onbData.name,email:onbData.email,password:onbData.pass,phone:onbData.phone,whatsapp:onbData.whatsapp,address:onbData.address||'',slugOverride:onbData.shopSlug,planId:onbData.planId,category:onbData.category,themeId:onbData.themeId,instagram:onbData.instagram,timezone:onbData.timezone,hours:onbData.hours,orderLeadDays:onbData.category==='food'?(onbData.orderLeadDays??1):0,professionals:onbData.professionals,services:onbData.services,logoFile:onbData.logoFile,coverFile:onbData.coverFile,emailVerificationSkipped:!!onbData.emailVerificationSkipped,emailVerificationSkippedReason:onbData.emailVerificationSkippedReason||''})
     .then(()=>{onbClearDraft();closeModal();toast('Página publicada com sucesso!','ok');})
     .catch(err=>{console.error('[Groomin] signup publish:',err&&err.code||'',err&&err.message||err);if(btn&&origBtnHTML){btn.disabled=false;btn.innerHTML=origBtnHTML;}toast(fbErrMsg(err,'signup'),'err');});

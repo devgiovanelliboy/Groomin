@@ -29,15 +29,22 @@
   const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 
   async function load() {
-    const appMod = await import(SDK + "firebase-app.js");
-    A = await import(SDK + "firebase-auth.js");
-    F = await import(SDK + "firebase-firestore.js");
-    FN = await import(SDK + "firebase-functions.js");
+    // Imports em paralelo: em conexão móvel cada await sequencial adicionava um round-trip
+    const wantAppCheck = window.FIREBASE_APPCHECK_SITE_KEY && !IS_LOCAL;
+    const [appMod, a, f, fn, ac, st] = await Promise.all([
+      import(SDK + "firebase-app.js"),
+      import(SDK + "firebase-auth.js"),
+      import(SDK + "firebase-firestore.js"),
+      import(SDK + "firebase-functions.js"),
+      wantAppCheck ? import(SDK + "firebase-app-check.js") : null,
+      cfg.storageBucket ? import(SDK + "firebase-storage.js") : null,
+    ]);
+    A = a; F = f; FN = fn;
     FB.app = appMod.initializeApp(cfg);
     FB.auth = A.getAuth(FB.app);
     FB.functions = FN.getFunctions(FB.app, "us-central1");
-    if (window.FIREBASE_APPCHECK_SITE_KEY && !IS_LOCAL) {
-      AC = await import(SDK + "firebase-app-check.js");
+    if (ac) {
+      AC = ac;
       const Provider = AC.ReCaptchaEnterpriseProvider || AC.ReCaptchaV3Provider;
       AC.initializeAppCheck(FB.app, {
         provider: new Provider(window.FIREBASE_APPCHECK_SITE_KEY),
@@ -45,8 +52,8 @@
       });
       FB.appCheck = true;
     }
-    if (cfg.storageBucket) {
-      ST = await import(SDK + "firebase-storage.js");
+    if (st) {
+      ST = st;
       FB.storage = ST.getStorage(FB.app);
     }
     try {
@@ -521,6 +528,13 @@
           days: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
         };
         const ref = await addDoc(collection(FB.db, "tenants", tid, "barbers"), payload);
+        if (b.photoFile && b.photoFile.size && window.fbUploadTenantImage) {
+          try {
+            const up = await window.fbUploadTenantImage(tid, "barbers", b.photoFile);
+            payload.photoUrl = up.url; payload.photoPath = up.path;
+            await setDoc(ref, { photoUrl: up.url, photoPath: up.path }, { merge: true });
+          } catch (e) { console.warn("[Groomin] foto do profissional falhou:", e.code || "", e.message || e); }
+        }
         createdBarbers.push({ id: ref.id, ...payload });
       }
       hydrateSignupCache(tid, tenantPayload, subPayload, createdServices, createdBarbers);
@@ -649,6 +663,13 @@
           days: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6], vacations: [], active: true, rating: 5,
         };
         const ref = await addDoc(collection(FB.db, "tenants", tid, "barbers"), payload);
+        if (b.photoFile && b.photoFile.size && window.fbUploadTenantImage) {
+          try {
+            const up = await window.fbUploadTenantImage(tid, "barbers", b.photoFile);
+            payload.photoUrl = up.url; payload.photoPath = up.path;
+            await setDoc(ref, { photoUrl: up.url, photoPath: up.path }, { merge: true });
+          } catch (e) { console.warn("[Groomin] foto do profissional falhou:", e.code || "", e.message || e); }
+        }
         createdBarbers.push({ id: ref.id, ...payload });
       }
       hydrateSignupCache(tid, tenantPayload, subPayload, createdServices, createdBarbers);
@@ -776,20 +797,26 @@
   // ---------------- PÁGINA PÚBLICA (leitura anônima por slug) ----------------
   window.fbLoadPublicShop = async function (slug) {
     await ensureReady();
-    try { await window.fbLoadPlatformSettings(); } catch (_) {}
     const { doc, getDoc, getDocs, collection } = F;
+    // platformSettings em paralelo com o slug — nenhum depende do outro
+    const settingsP = window.fbLoadPlatformSettings().catch(() => {});
     const slugSnap = await getDoc(doc(FB.db, "slugs", slug));
-    if (!slugSnap.exists()) return false;
+    if (!slugSnap.exists()) { await settingsP; return false; }
     const tid = slugSnap.data().tenantId;
-    const tSnap = await getDoc(doc(FB.db, "tenants", tid));
+    // tenant + subcoleções em paralelo: só dependem do tid, não umas das outras
+    const collNames = ["services", "barbers", "reviews", "blocks"];
+    const [tSnap, ...collSnaps] = await Promise.all([
+      getDoc(doc(FB.db, "tenants", tid)),
+      ...collNames.map((name) => getDocs(collection(FB.db, "tenants", tid, name))),
+    ]);
+    await settingsP;
     if (!tSnap.exists()) return false;
     const data = DB.get();
     upsert(data.barbershops, { id: tid, ...tSnap.data() });
-    for (const name of ["services", "barbers", "reviews", "blocks"]) {
-      const qs = await getDocs(collection(FB.db, "tenants", tid, name));
-      const arr = qs.docs.map((d) => ({ id: d.id, barbershopId: tid, ...d.data() }));
+    collNames.forEach((name, i) => {
+      const arr = collSnaps[i].docs.map((d) => ({ id: d.id, barbershopId: tid, ...d.data() }));
       data[name] = mergeOther(data[name], arr, tid);
-    }
+    });
     DB.save();
     return true;
   };
