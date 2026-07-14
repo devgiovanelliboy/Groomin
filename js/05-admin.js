@@ -301,7 +301,7 @@ function adminDeleteShop(shopId){
   confirmAction('Excluir cliente?','Todos os dados deste negócio serão removidos permanentemente.',async()=>{
     try{
       if(window.fbAdminDeleteTenant) await window.fbAdminDeleteTenant({tenantId:shopId});
-      ['services','barbers','customers','appointments','products','campaigns','reviews','blocks','sales','cashSessions','stockMoves','blocks','notifications','products','combos','campaigns','settings'].forEach(c=>{if(DB.get()[c])DB.get()[c]=DB.get()[c].filter(x=>x.barbershopId!==shopId);});
+      ['services','barbers','customers','appointments','products','campaigns','reviews','blocks','sales','cashSessions','stockMoves','notifications','combos','invoices'].forEach(c=>{if(Array.isArray(DB.get()[c]))DB.get()[c]=DB.get()[c].filter(x=>x.barbershopId!==shopId);});
       DB.get().subscriptions=(DB.get().subscriptions||[]).filter(s=>s.barbershopId!==shopId);
       DB.get().users=(DB.get().users||[]).filter(u=>u.barbershopId!==shopId);
       DB.remove('barbershops',shopId);DB.log('Cliente excluído',shop.name,shopId);

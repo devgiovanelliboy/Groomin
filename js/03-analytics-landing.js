@@ -1055,6 +1055,8 @@ const ONB_CATEGORIES=[
   {id:'dentist',label:'Dentista',icon:'shield',desc:'Consultas e procedimentos odontológicos.',theme:'Ocean Blue',role:'Dentista',services:[['Consulta odontológica',150,45],['Limpeza',180,60],['Avaliação',120,45]]},
   {id:'photographer',label:'Fotógrafo',icon:'camera',desc:'Ensaios e sessões fotográficas.',theme:'Elegant Dark',role:'Fotógrafo',services:[['Ensaio externo',350,120],['Retrato profissional',220,60],['Cobertura de evento',800,240]]},
   {id:'consultant',label:'Consultor',icon:'briefcase',desc:'Consultorias e reuniões profissionais.',theme:'Ocean Blue',role:'Consultor',services:[['Consulta estratégica',250,60],['Mentoria',300,90],['Diagnóstico inicial',150,45]]},
+  {id:'food',label:'Alimentos',icon:'coffee',desc:'Tortas, bolos, doces e comidas por encomenda com entrega agendada.',theme:'Sunset Orange',role:'Confeiteiro(a)',services:[['Torta por encomenda',90,60],['Bolo personalizado',150,60],['Kit festa',220,60]]},
+  {id:'car-wash',label:'Lava rápido & automotivo',icon:'droplet',desc:'Lavagem, polimento, higienização e estética automotiva.',theme:'Ocean Blue',role:'Esteticista automotivo',services:[['Lavagem simples',40,40],['Lavagem completa',80,60],['Polimento',250,120]]},
   {id:'other',label:'Outro',icon:'sparkle',desc:'Qualquer negócio baseado em agendamento.',theme:'Ocean Blue',role:'Profissional',services:[['Atendimento',100,60],['Consulta',120,60],['Retorno',80,45]]}
 ];
 function normalizeOnbPlan(id){return ONB_PLAN_IDS.includes(id)?id:'trial';}
@@ -1068,7 +1070,7 @@ function onbCategoryDesc(id){return onbCategory(id).desc;}
 function onbApplyCategoryDefaults(id,force){
   const c=onbCategory(id);onbData.category=c.id;onbData.themeId=c.theme;
   if(force||!(onbData.professionals||[]).length)onbData.professionals=[{name:'Profissional principal',role:c.role}];
-  if(force||!(onbData.services||[]).length)onbData.services=c.services.map(s=>({name:s[0],price:s[1],duration:s[2],category:'Serviços'}));
+  if(force||!(onbData.services||[]).length)onbData.services=c.services.map(s=>({name:s[0],price:s[1],duration:s[2],category:c.id==='food'?'Produtos':'Serviços'}));
 }
 function onbSerializableDraft(){
   const {logoFile,coverFile,pass,emailVerified,...draft}=onbData||{};
@@ -1155,6 +1157,7 @@ function renderOnbStep(){
     <div class="form-row"><div class="field"><label>Abertura</label><input class="input" type="time" id="onb_open" value="${h.open}" onchange="onbPersistBusinessDraft()"></div><div class="field"><label>Fechamento</label><input class="input" type="time" id="onb_close" value="${h.close}" onchange="onbPersistBusinessDraft()"></div></div>
     <div class="form-row"><div class="field"><label>Início do almoço</label><input class="input" type="time" id="onb_lunch_start" value="${h.lunchStart}" onchange="onbPersistBusinessDraft()"></div><div class="field"><label>Fim do almoço</label><input class="input" type="time" id="onb_lunch_end" value="${h.lunchEnd}" onchange="onbPersistBusinessDraft()"></div></div>
     <div class="field"><label>Dias de funcionamento</label><div class="chips" id="onb_days">${DOW.map((d,i)=>`<span class="chip-toggle ${h.days.includes(i)?'on':''}" data-day="${i}" onclick="this.classList.toggle('on');onbPersistBusinessDraft()">${d}</span>`).join('')}</div></div>
+    ${onbData.category==='food'?`<div class="field"><label>Antecedência mínima das encomendas</label><select class="input" id="onb_lead_days" onchange="onbPersistBusinessDraft()">${ORDER_LEAD_OPTIONS.map(o=>`<option value="${o[0]}" ${(onbData.orderLeadDays??1)===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select><p class="muted" style="font-size:12px;margin-top:4px">Ex.: 1 dia — pedido feito na terça é entregue a partir da quarta.</p></div>`:''}
     <div class="onb-editor-intro"><div><b>Equipe e serviços</b><span>Cadastre pelo menos um profissional e um serviço para publicar sua página.</span></div></div>
     <div class="onb-suggest-grid">${onbListEditor('professionals','Profissionais','Quem atende seus clientes?','onbProfessionalForm')}${onbListEditor('services','Serviços','O que seus clientes podem agendar?','onbServiceForm')}</div>`;
   }
@@ -1307,6 +1310,7 @@ function onbPersistBusinessDraft(){
   onbData.phone=$('#onb_phone').value.trim();
   onbData.address=$('#onb_addr').value.trim();
   onbData.timezone=$('#onb_tz').value;
+  if($('#onb_lead_days'))onbData.orderLeadDays=+$('#onb_lead_days').value||0;
   onbData.hours={open:$('#onb_open').value,close:$('#onb_close').value,lunchStart:$('#onb_lunch_start').value,lunchEnd:$('#onb_lunch_end').value,days:$$('#onb_days .chip-toggle.on').map(x=>+x.dataset.day)};
   onbSaveDraft();
 }
@@ -1328,7 +1332,7 @@ function onbListEditor(key,title,subtitle,formFn){
 function onbProfessionalForm(){const c=onbCategory(onbData.category);return `<div class="onb-inline-form"><div class="form-row"><div class="field"><label>Nome *</label><input class="input" id="onb_prof_name" placeholder="Ex.: nome do profissional"></div><div class="field"><label>Função</label><input class="input" id="onb_prof_role" placeholder="${escapeHtml(c.role)}"></div></div><button class="btn btn-primary btn-sm" type="button" onclick="onbAddProfessional()">${icon('plus')} Adicionar profissional</button></div>`;}
 function onbServiceForm(){const c=onbCategory(onbData.category),s=(c.services&&c.services[0])||['Atendimento',100,60];return `<div class="onb-inline-form"><div class="field"><label>Nome do serviço *</label><input class="input" id="onb_svc_name" placeholder="Ex.: ${escapeHtml(s[0])}"></div><div class="form-row"><div class="field"><label>Duração em minutos</label><input class="input" type="number" id="onb_svc_duration" value="${s[2]}" min="5"></div><div class="field"><label>Preço em R$</label><input class="input" type="number" id="onb_svc_price" value="${s[1]}" min="0"></div></div><button class="btn btn-primary btn-sm" type="button" onclick="onbAddService()">${icon('plus')} Adicionar serviço</button></div>`;}
 function onbAddProfessional(){onbPersistBusinessDraft();const name=$('#onb_prof_name').value.trim();if(name.length<2){toast('Informe o nome do profissional.','err');return;}onbData.professionals=onbData.professionals||[];onbData.professionals.push({name,role:$('#onb_prof_role').value.trim()||onbCategory(onbData.category).role||'Profissional'});onbSaveDraft();onbRefreshContent();}
-function onbAddService(){onbPersistBusinessDraft();const name=$('#onb_svc_name').value.trim();if(name.length<2){toast('Informe o nome do serviço.','err');return;}onbData.services=onbData.services||[];onbData.services.push({name,duration:+$('#onb_svc_duration').value||30,price:+$('#onb_svc_price').value||0,category:'Serviços'});onbSaveDraft();onbRefreshContent();}
+function onbAddService(){onbPersistBusinessDraft();const name=$('#onb_svc_name').value.trim();if(name.length<2){toast('Informe o nome do serviço.','err');return;}onbData.services=onbData.services||[];onbData.services.push({name,duration:+$('#onb_svc_duration').value||30,price:+$('#onb_svc_price').value||0,category:onbData.category==='food'?'Produtos':'Serviços'});onbSaveDraft();onbRefreshContent();}
 function onbRemove(key,i){onbPersistBusinessDraft();onbData[key].splice(i,1);onbSaveDraft();onbRefreshContent();}
 function onbCollectBusinessInfo(){
   const shop=$('#onb_shop').value.trim();if(shop.length<2){toast('Informe o nome do negócio.','err');return false;}
@@ -1337,6 +1341,7 @@ function onbCollectBusinessInfo(){
   if(onbData.logoFile&&onbData.logoFile.name)onbData.logoFileName=onbData.logoFile.name;
   if(onbData.coverFile&&onbData.coverFile.name)onbData.coverFileName=onbData.coverFile.name;
   onbData.instagram=normalizeInstagram($('#onb_instagram').value);onbData.whatsapp=whatsapp;onbData.phone=$('#onb_phone').value.trim();onbData.address=$('#onb_addr').value.trim();onbData.timezone=$('#onb_tz').value;
+  if($('#onb_lead_days'))onbData.orderLeadDays=+$('#onb_lead_days').value||0;
   onbData.hours={open:$('#onb_open').value,close:$('#onb_close').value,lunchStart:$('#onb_lunch_start').value,lunchEnd:$('#onb_lunch_end').value,days:$$('#onb_days .chip-toggle.on').map(x=>+x.dataset.day)};
   onbSaveDraft();
   return true;
@@ -1477,7 +1482,7 @@ function submitOnboarding(){
   if(onbData.planId!=='trial'&&!onbData.paymentStarted){toast('Antes de publicar, cadastre o cartão ou conclua o pagamento pelo Stripe.','err');onbStep=4;onbRefreshContent();return;}
   const btn=$('#onb_submit');const origBtnHTML=btn?btn.innerHTML:null;
   if(btn){btn.disabled=true;btn.innerHTML='Publicando no Firestore...';}
-  setupFn({shopName:onbData.shopName,ownerName:onbData.name,email:onbData.email,password:onbData.pass,phone:onbData.phone,whatsapp:onbData.whatsapp,address:onbData.address||'',slugOverride:onbData.shopSlug,planId:onbData.planId,category:onbData.category,themeId:onbData.themeId,instagram:onbData.instagram,timezone:onbData.timezone,hours:onbData.hours,professionals:onbData.professionals,services:onbData.services,logoFile:onbData.logoFile,coverFile:onbData.coverFile,emailVerificationSkipped:!!onbData.emailVerificationSkipped,emailVerificationSkippedReason:onbData.emailVerificationSkippedReason||''})
+  setupFn({shopName:onbData.shopName,ownerName:onbData.name,email:onbData.email,password:onbData.pass,phone:onbData.phone,whatsapp:onbData.whatsapp,address:onbData.address||'',slugOverride:onbData.shopSlug,planId:onbData.planId,category:onbData.category,themeId:onbData.themeId,instagram:onbData.instagram,timezone:onbData.timezone,hours:onbData.hours,orderLeadDays:onbData.category==='food'?(onbData.orderLeadDays??1):0,professionals:onbData.professionals,services:onbData.services,logoFile:onbData.logoFile,coverFile:onbData.coverFile,emailVerificationSkipped:!!onbData.emailVerificationSkipped,emailVerificationSkippedReason:onbData.emailVerificationSkippedReason||''})
     .then(()=>{onbClearDraft();closeModal();toast('Página publicada com sucesso!','ok');})
     .catch(err=>{console.error('[Groomin] signup publish:',err&&err.code||'',err&&err.message||err);if(btn&&origBtnHTML){btn.disabled=false;btn.innerHTML=origBtnHTML;}toast(fbErrMsg(err,'signup'),'err');});
 }
@@ -1583,6 +1588,7 @@ function fbErrMsg(err,ctx){
   if(/unavailable|deadline-exceeded/.test(c))return 'Serviço temporariamente indisponível. Tente novamente.';
   if(/already-exists/.test(c))return 'Esse horário acabou de ser reservado.';
   if(ctx==='booking'&&/Teste gratuito concluído/i.test(err.message||''))return 'Agenda temporariamente indisponível para novos agendamentos online.';
+  if(ctx==='booking'&&/anteced/i.test(err.message||''))return err.message;
   if(ctx==='booking'&&/failed-precondition/.test(c))return 'Agenda pausada. Novos agendamentos estão indisponíveis no momento.';
   if(ctx==='signup')return 'Não foi possível criar sua conta.';
   if(ctx==='booking')return 'Não foi possível agendar. Tente novamente.';

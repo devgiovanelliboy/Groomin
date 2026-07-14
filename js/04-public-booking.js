@@ -105,9 +105,15 @@ const PUBLIC_BUSINESS_CATEGORIES={
   'barbershop':'Barbearia','hair-salon':'Salão de cabelo','nail-designer':'Nail designer','lash-designer':'Lash designer',
   'makeup-artist':'Maquiadora','beauty-clinic':'Clínica de estética','tattoo-studio':'Estúdio de tatuagem',
   'massage-therapist':'Massoterapeuta','personal-trainer':'Personal trainer','nutritionist':'Nutricionista',
-  'physiotherapist':'Fisioterapeuta','dentist':'Dentista','photographer':'Fotógrafo','consultant':'Consultor','other':'Agendamento online'
+  'physiotherapist':'Fisioterapeuta','dentist':'Dentista','photographer':'Fotógrafo','consultant':'Consultor','food':'Alimentos por encomenda','car-wash':'Lava rápido & automotivo','other':'Agendamento online'
 };
 function publicCategoryLabel(v){return PUBLIC_BUSINESS_CATEGORIES[v]||v||'Agendamento online';}
+function shopIsFood(shop){return !!(shop&&shop.category==='food');}
+/* Textos do fluxo público por segmento: encomenda de alimentos usa vocabulário de pedido/entrega */
+function bookingTexts(shop){
+  if(shopIsFood(shop))return{steps:['Produto','Preparo','Dia','Horário','Confirmar'],modalTitle:'Fazer encomenda',modalSub:'Sem login. Sem app. Endereço e detalhes pelo WhatsApp.',pickItem:'Escolha o produto',itemCat:'Produto',pickPro:'Quem vai preparar seu pedido',pickDate:'Escolha o dia da entrega',pickTime:'Escolha o horário de entrega',confirmTitle:'Confirme seu pedido',sumItem:'Produto',sumPro:'Preparado por',sumDate:'Entrega',contactHelp:'A empresa confirma o pedido e combina o endereço de entrega pelo WhatsApp. Nenhuma conta é necessária.',successTitle:'Pedido reservado',successMsg:'Envie a confirmação pelo WhatsApp para combinar a entrega com',ctaBook:'Encomendar'};
+  return{steps:['Serviço','Profissional','Data','Horário','Confirmar'],modalTitle:'Agendar horário',modalSub:'Sem login. Sem app. Confirmação pelo WhatsApp.',pickItem:'Escolha o serviço',itemCat:'Serviço',pickPro:'Escolha o profissional',pickDate:'Escolha a data',pickTime:'Escolha o horário',confirmTitle:'Confirme seu horário',sumItem:'Serviço',sumPro:'Profissional',sumDate:'Data',contactHelp:'A empresa confirma o agendamento pelo WhatsApp. Nenhuma conta é necessária.',successTitle:'Horário reservado',successMsg:'Envie a confirmação pelo WhatsApp para finalizar com',ctaBook:'Agendar'};
+}
 function publicThemeSlug(v){return String(v||'ocean-blue').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'ocean-blue';}
 function applyPublicBusinessTheme(shop){document.documentElement.setAttribute('data-business-theme',publicThemeSlug(shop&&shop.themeId));}
 function renderPublic(r){
@@ -132,7 +138,7 @@ function renderPublic(r){
   if(!subscriptionCourtesyActive(_pubSub)&&(_pubSubStatus==='past_due'||_pubSubStatus==='canceled')){$('#root').innerHTML=publicShell(`<div class="container pub-empty">${emptyState('lock','Link indisponível no momento','Entre em contato com o estabelecimento.')}</div>`,shop);return;}
   if(shopFreeBookingUsage(shop.id).locked){$('#root').innerHTML=publicShell(freeLimitMessage(shop),shop);return;}
 
-  document.title=`${shop.name} - Agende online`;
+  document.title=`${shop.name} - ${shopIsFood(shop)?'Encomende online':'Agende online'}`;
   window.currentPublicShopId=shop.id;
   sessionStorage.setItem('groomin_login_shop',shop.id);
 
@@ -154,9 +160,9 @@ function renderPublic(r){
         <div class="pub-title">
           <span class="pub-kicker">${escapeHtml(publicCategoryLabel(shop.category))}</span>
           <h1>${escapeHtml(shop.name)}</h1>
-          <p>${escapeHtml(shop.description||'Agende seu horário online com praticidade.')}</p>
+          <p>${escapeHtml(shop.description||(shopIsFood(shop)?'Encomende com dia e horário de entrega.':'Agende seu horário online com praticidade.'))}</p>
           <div class="pub-actions">
-            <button class="btn btn-primary" onclick="startBooking('${shop.id}')">${icon('calendar')} Agendar horário</button>
+            <button class="btn btn-primary" onclick="startBooking('${shop.id}')">${icon('calendar')} ${shopIsFood(shop)?'Fazer encomenda':'Agendar horário'}</button>
             ${whatsappUrl?`<a class="btn btn-light" href="${whatsappUrl}" target="_blank" rel="noopener">${icon('whatsapp')} WhatsApp</a>`:''}
           </div>
         </div>
@@ -170,22 +176,22 @@ function renderPublic(r){
         ${shop.whatsapp||shop.phone?`<div class="pub-info-card"><b>${icon('phone')} Contato</b><strong>${escapeHtml(shop.whatsapp||shop.phone)}</strong>${whatsappUrl?`<a href="${whatsappUrl}" target="_blank" rel="noopener">Chamar no WhatsApp</a>`:''}</div>`:''}
       </section>
       <section class="pub-section">
-        <div class="pub-section-head"><h2>Serviços</h2><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}')">Agendar</button></div>
+        <div class="pub-section-head"><h2>${shopIsFood(shop)?'Produtos':'Serviços'}</h2><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}')">${shopIsFood(shop)?'Encomendar':'Agendar'}</button></div>
         <div class="pub-service-grid">
-          ${services.length?services.map(s=>`<article class="pub-service"><div><span>${escapeHtml(s.category||'Serviço')}</span><h3>${escapeHtml(s.name)}</h3><p>${escapeHtml(s.desc||'')}</p></div><div class="pub-service-foot"><b>${money(s.price)}</b><small>${s.duration} min</small><button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}','${s.id}')">Agendar</button></div></article>`).join(''):emptyState('scissors','Sem serviços ainda','Esta empresa ainda não publicou serviços.')}
+          ${services.length?services.map(s=>`<article class="pub-service"><div><span>${escapeHtml(s.category||(shopIsFood(shop)?'Produto':'Serviço'))}</span><h3>${escapeHtml(s.name)}</h3><p>${escapeHtml(s.desc||'')}</p></div><div class="pub-service-foot"><b>${money(s.price)}</b><small>${shopIsFood(shop)?'Entrega agendada':`${s.duration} min`}</small><button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}','${s.id}')">${shopIsFood(shop)?'Encomendar':'Agendar'}</button></div></article>`).join(''):emptyState('scissors',shopIsFood(shop)?'Sem produtos ainda':'Sem serviços ainda',shopIsFood(shop)?'Esta empresa ainda não publicou produtos.':'Esta empresa ainda não publicou serviços.')}
         </div>
       </section>
 
       <section class="pub-section">
-        <div class="pub-section-head"><h2>Profissionais</h2></div>
+        <div class="pub-section-head"><h2>${shopIsFood(shop)?'Quem prepara':'Profissionais'}</h2></div>
         <div class="pub-pro-grid">
-          ${barbers.length?barbers.map(b=>`<article class="pub-pro"><div class="pub-pro-photo">${imageOrInitials(b.photoUrl,b.name,'pub-pro-img')}</div><div><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.role||'Profissional')}</p><div class="pub-days">${publicProfessionalDayList(shop,b)}</div></div><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}',null,'${b.id}')">Agendar</button></article>`).join(''):emptyState('users','Sem profissionais ainda','A equipe ainda não foi publicada.')}
+          ${barbers.length?barbers.map(b=>`<article class="pub-pro"><div class="pub-pro-photo">${imageOrInitials(b.photoUrl,b.name,'pub-pro-img')}</div><div><h3>${escapeHtml(b.name)}</h3><p>${escapeHtml(b.role||'Profissional')}</p><div class="pub-days">${publicProfessionalDayList(shop,b)}</div></div><button class="btn btn-ghost btn-sm" onclick="startBooking('${shop.id}',null,'${b.id}')">${shopIsFood(shop)?'Encomendar':'Agendar'}</button></article>`).join(''):emptyState('users','Sem profissionais ainda','A equipe ainda não foi publicada.')}
         </div>
       </section>
 
       <section class="pub-booking-band">
-        <div><h2>Escolha seu melhor horário</h2><p>Reserve online em poucos passos.</p></div>
-        <button class="btn btn-primary" onclick="startBooking('${shop.id}')">${icon('calendar')} Agendar agora</button>
+        <div><h2>${shopIsFood(shop)?'Escolha o dia e horário da entrega':'Escolha seu melhor horário'}</h2><p>${shopIsFood(shop)?'Encomende online em poucos passos.':'Reserve online em poucos passos.'}</p></div>
+        <button class="btn btn-primary" onclick="startBooking('${shop.id}')">${icon('calendar')} ${shopIsFood(shop)?'Encomendar agora':'Agendar agora'}</button>
       </section>
     </div>`,shop);
 
@@ -201,7 +207,7 @@ function publicShell(inner,shop){
     ${brand}
     <div class="pub-nav-actions">
       <button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
-      ${shop?`<button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}')">${icon('calendar')} Agendar</button>`:''}
+      ${shop?`<button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}')">${icon('calendar')} ${shopIsFood(shop)?'Encomendar':'Agendar'}</button>`:''}
     </div>
   </div></header><main class="pub-main">${inner}</main><footer class="pub-powered">Powered by Groomin</footer>`;
 }
@@ -234,6 +240,7 @@ function bookingShopWhatsApp(shop){
   return (shop&&(shop.whatsapp||shop.phone)?(shop.whatsapp||shop.phone):'').replace(/\D/g,'');
 }
 function bookingWhatsAppMessage(shop,svc,barber,code){
+  if(shopIsFood(shop))return encodeURIComponent(`Olá, ${shop.name}! Acabei de fazer uma encomenda:\n\nProduto: ${svc.name}\nEntrega: ${fmtDate(booking.date)} às ${booking.time}\nNome: ${booking.name}\nWhatsApp: ${booking.phone}${code?`\nCódigo: #${code}`:''}\n\nVou te passar o endereço de entrega por aqui. Pode confirmar?`);
   return encodeURIComponent(`Olá, ${shop.name}! Acabei de fazer um agendamento:\n\nServiço: ${svc.name}\nProfissional: ${barber?barber.name:'A definir'}\nData: ${fmtDate(booking.date)}\nHorário: ${booking.time}\nNome: ${booking.name}\nWhatsApp: ${booking.phone}${code?`\nCódigo: #${code}`:''}\n\nPode confirmar por aqui?`);
 }
 function startBooking(shopId,serviceId,barberId){
@@ -244,53 +251,57 @@ function startBooking(shopId,serviceId,barberId){
   renderBooking();
 }
 function renderBooking(){
-  const steps=['Serviço','Profissional','Data','Horário','Confirmar'];
+  const T=bookingTexts(DB.find('barbershops',booking.shopId));
+  const steps=T.steps;
   const current=Math.min(booking.step,5);
-  openModal(`<div class="modal-head"><div><h3>Agendar horário</h3><div class="sub">Sem login. Sem app. Confirmação pelo WhatsApp.</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  openModal(`<div class="modal-head"><div><h3>${T.modalTitle}</h3><div class="sub">${T.modalSub}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
   <div class="modal-body booking-flow"><div class="wizard-steps booking-steps">${steps.map((s,i)=>{const n=i+1;const cls=current===n?'active':current>n?'done':'';return `<div class="wstep ${cls}"><div class="num">${current>n?icon('check'):n}</div><div class="lbl">${s}</div></div>`;}).join('')}</div><div id="bookStep"></div></div>`,'lg booking-modal');
   renderBookingStep();
 }
 function renderBookingStep(){
   const c=$('#bookStep'),shopId=booking.shopId;
+  const T=bookingTexts(DB.find('barbershops',shopId));
+  const isFood=shopIsFood(DB.find('barbershops',shopId));
   if(booking.step===1){
     const svcs=DB.scope('services',shopId).filter(s=>s.active);
-    c.innerHTML=`<h4>Escolha o serviço</h4><div class="select-grid booking-select-grid">${svcs.map(s=>`<button class="select-item ${booking.service===s.id?'sel':''}" onclick="pickService('${s.id}')"><div class="t">${escapeHtml(s.name)}</div><div class="d">${s.duration} min · ${escapeHtml(s.category||'Serviço')}</div><div class="p">${money(s.price)}</div></button>`).join('')}</div>`;
+    c.innerHTML=`<h4>${T.pickItem}</h4><div class="select-grid booking-select-grid">${svcs.map(s=>`<button class="select-item ${booking.service===s.id?'sel':''}" onclick="pickService('${s.id}')"><div class="t">${escapeHtml(s.name)}</div><div class="d">${isFood?escapeHtml(s.category||T.itemCat):`${s.duration} min · ${escapeHtml(s.category||T.itemCat)}`}</div><div class="p">${money(s.price)}</div></button>`).join('')}</div>`;
   }else if(booking.step===2){
     const barbers=DB.scope('barbers',shopId).filter(b=>b.active);
-    c.innerHTML=`<h4>Escolha o profissional</h4><div class="select-grid booking-select-grid">
+    c.innerHTML=`<h4>${T.pickPro}</h4><div class="select-grid booking-select-grid">
       <button class="select-item ${booking.barber==='any'?'sel':''}" onclick="pickBarber('any')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${icon('users')}</div></div><div><div class="t">Qualquer profissional</div><div class="d">Primeiro horário disponível</div></div></div></button>
       ${barbers.map(b=>`<button class="select-item ${booking.barber===b.id?'sel':''}" onclick="pickBarber('${b.id}')"><div style="display:flex;align-items:center;gap:10px"><div class="t-user"><div class="av">${imageOrInitials(b.photoUrl,b.name,'mini-avatar-img')}</div></div><div><div class="t">${escapeHtml(b.name)}</div><div class="d">${escapeHtml(b.role||'Profissional')}</div><div class="barber-days compact">${DOW.map((d,i)=>`<span class="${(DB.find('barbershops',shopId).dayHours?shopDayHours(DB.find('barbershops',shopId),i).active:(b.days||[]).includes(i))?'day on':'day'}">${d}</span>`).join('')}</div></div></div></button>`).join('')}</div>
       <div class="booking-mobile-actions"><button class="btn btn-ghost" onclick="bookGo(1)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===3){
     const svc=DB.find('services',booking.service);
     if(!svc){toast('Serviço não disponível. Escolha outro.','err');booking.step=1;renderBooking();return;}
-    const dates=[];for(let i=0;i<14;i++)dates.push(DB.addDays(DB.todayISO(),i));
-    c.innerHTML=`<h4>Escolha a data</h4><div class="date-strip booking-date-strip">${dates.map(dt=>{const day=new Date(dt+'T00:00:00');const works=booking.barber==='any'?anySlots(shopId,dt,svc.duration).some(s=>s.available):barberSlots(shopId,booking.barber,dt,svc.duration).some(s=>s.available);return `<button class="date-pill ${booking.date===dt?'sel':''}" ${works?'':'disabled'} onclick="pickDate('${dt}')"><div class="dow">${DOW[day.getDay()]}</div><div class="dnum">${day.getDate()}</div><div class="mon">${MON[day.getMonth()]}</div></button>`;}).join('')}</div>
+    const lead=shopLeadDays(DB.find('barbershops',shopId));
+    const dates=[];for(let i=lead;i<lead+14;i++)dates.push(DB.addDays(DB.todayISO(),i));
+    c.innerHTML=`<h4>${T.pickDate}</h4>${lead?`<p class="muted booking-help">${isFood?'Encomendas':'Reservas'} com pelo menos ${lead} dia${lead>1?'s':''} de antecedência.</p>`:''}<div class="date-strip booking-date-strip">${dates.map(dt=>{const day=new Date(dt+'T00:00:00');const works=booking.barber==='any'?anySlots(shopId,dt,svc.duration).some(s=>s.available):barberSlots(shopId,booking.barber,dt,svc.duration).some(s=>s.available);return `<button class="date-pill ${booking.date===dt?'sel':''}" ${works?'':'disabled'} onclick="pickDate('${dt}')"><div class="dow">${DOW[day.getDay()]}</div><div class="dnum">${day.getDate()}</div><div class="mon">${MON[day.getMonth()]}</div></button>`;}).join('')}</div>
       <div class="booking-mobile-actions"><button class="btn btn-ghost" onclick="bookGo(2)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===4){
     const svc=DB.find('services',booking.service);
     if(!svc){toast('Serviço não disponível. Escolha outro.','err');booking.step=1;renderBooking();return;}
     const slots=booking.barber==='any'?anySlots(shopId,booking.date,svc.duration):barberSlots(shopId,booking.barber,booking.date,svc.duration);
-    c.innerHTML=`<h4>Escolha o horário</h4><p class="muted booking-help">${DOW_FULL[new Date(booking.date+'T00:00:00').getDay()]}, ${fmtDate(booking.date)}</p>
+    c.innerHTML=`<h4>${T.pickTime}</h4><p class="muted booking-help">${DOW_FULL[new Date(booking.date+'T00:00:00').getDay()]}, ${fmtDate(booking.date)}</p>
       ${slots.length?`<div class="slot-grid booking-slot-grid">${slots.map(s=>`<button class="slot ${booking.time===s.time?'sel':''}" ${s.available?'':'disabled'} onclick="pickTime('${s.time}','${s.barberId||''}')">${s.time}</button>`).join('')}</div>`:emptyState('clock','Sem horários','Não há horários livres nesta data.')}
       <div class="booking-mobile-actions"><button class="btn btn-ghost" onclick="bookGo(3)">${icon('arrowLeft')} Voltar</button></div>`;
   }else if(booking.step===5){
     const shop=DB.find('barbershops',shopId),svc=DB.find('services',booking.service);
     const bid=booking.barber==='any'?(booking.assignedBarber||firstAvailableBarber(shopId,booking.date,booking.time,svc.duration)):booking.barber;
     const barber=DB.find('barbers',bid);
-    c.innerHTML=`<h4>Confirme seu horário</h4>
+    c.innerHTML=`<h4>${T.confirmTitle}</h4>
       <div class="booking-confirm">
         <div class="card booking-summary-card">
-          <div class="summary-line"><span class="muted">Serviço</span><b>${escapeHtml(svc.name)}</b></div>
-          <div class="summary-line"><span class="muted">Profissional</span><b>${barber?escapeHtml(barber.name):'A definir'}</b></div>
-          <div class="summary-line"><span class="muted">Data</span><b>${fmtDate(booking.date)}</b></div>
+          <div class="summary-line"><span class="muted">${T.sumItem}</span><b>${escapeHtml(svc.name)}</b></div>
+          <div class="summary-line"><span class="muted">${T.sumPro}</span><b>${barber?escapeHtml(barber.name):'A definir'}</b></div>
+          <div class="summary-line"><span class="muted">${T.sumDate}</span><b>${fmtDate(booking.date)}</b></div>
           <div class="summary-line"><span class="muted">Horário</span><b>${booking.time}</b></div>
           <div class="summary-line"><span class="muted">Total</span><b style="color:var(--primary);font-size:18px">${money(svc.price)}</b></div>
         </div>
         <div class="booking-contact-card">
           <div class="field"><label>Nome *</label><input class="input" id="bk_name" value="${escapeHtml(booking.name)}" placeholder="Seu nome"></div>
           <div class="field"><label>WhatsApp *</label><div class="input-icon">${icon('whatsapp')}<input class="input" id="bk_phone" value="${escapeHtml(booking.phone)}" inputmode="tel" placeholder="(11) 90000-0000"></div><div class="err">Informe um WhatsApp válido.</div></div>
-          <p class="muted booking-help">A empresa confirma o agendamento pelo WhatsApp. Nenhuma conta é necessária.</p>
+          <p class="muted booking-help">${T.contactHelp}</p>
         </div>
       </div>
       <div class="booking-mobile-actions split"><button class="btn btn-ghost" onclick="bookGo(4)">${icon('arrowLeft')} Voltar</button><button id="btn_confirm" class="btn btn-primary" onclick="confirmBooking()">${icon('whatsapp')} Confirmar</button></div>`;
@@ -321,14 +332,15 @@ function bookingValidateContact(){
   return true;
 }
 function bookingSuccessHtml(shop,svc,barber,code){
+  const T=bookingTexts(shop);
   const wpp=bookingShopWhatsApp(shop);
   const href=wpp?`https://wa.me/55${wpp}?text=${bookingWhatsAppMessage(shop,svc,barber,code)}`:'';
   return `<div class="success-wrap booking-success"><div class="success-check">${icon('check')}</div>
-    <h3>Horário reservado</h3>
-    <p class="muted">Envie a confirmação pelo WhatsApp para finalizar com ${escapeHtml(shop.name)}.</p>
+    <h3>${T.successTitle}</h3>
+    <p class="muted">${T.successMsg} ${escapeHtml(shop.name)}.</p>
     <div class="card booking-summary-card">
-      <div class="summary-line"><span class="muted">Serviço</span><b>${escapeHtml(svc.name)}</b></div>
-      <div class="summary-line"><span class="muted">Profissional</span><b>${escapeHtml(barber?barber.name:'A definir')}</b></div>
+      <div class="summary-line"><span class="muted">${T.sumItem}</span><b>${escapeHtml(svc.name)}</b></div>
+      <div class="summary-line"><span class="muted">${T.sumPro}</span><b>${escapeHtml(barber?barber.name:'A definir')}</b></div>
       <div class="summary-line"><span class="muted">Quando</span><b>${fmtDate(booking.date)} · ${booking.time}</b></div>
       ${code?`<div class="summary-line"><span class="muted">Código</span><b>#${code}</b></div>`:''}
     </div>
@@ -340,6 +352,8 @@ function confirmBooking(){
   const shopId=booking.shopId,svc=DB.find('services',booking.service);
   const bid0=booking.barber==='any'?firstAvailableBarber(shopId,booking.date,booking.time,svc.duration):booking.barber;
   if(!bid0){toast('Horário indisponível. Escolha outro.','err');booking.step=4;renderBooking();return;}
+  const leadMin=shopLeadDays(DB.find('barbershops',shopId));
+  if(leadMin&&booking.date<DB.addDays(DB.todayISO(),leadMin)){toast(`Pedidos precisam de pelo menos ${leadMin} dia${leadMin>1?'s':''} de antecedência. Escolha outra data.`,'err');booking.step=3;renderBooking();return;}
   if(shopFreeBookingUsage(shopId).locked){toast('Agenda temporariamente indisponível para novos agendamentos online.','err');closeModal();return;}
   const btn=$('#btn_confirm');if(btn){btn.disabled=true;btn.innerHTML=`${icon('clock')} Confirmando...`;}
   if(window.__FB_ENABLED){

@@ -431,7 +431,7 @@
   };
 
   // --- Finalizar cadastro do dono (usuário já autenticado via OTP) ---
-  window.fbCompleteOwnerSetup = async function ({ shopName, ownerName, phone, whatsapp, address, slugOverride, planId, category, themeId, instagram, timezone, hours, professionals, services, logoFile, coverFile, emailVerificationSkipped, emailVerificationSkippedReason }) {
+  window.fbCompleteOwnerSetup = async function ({ shopName, ownerName, phone, whatsapp, address, slugOverride, planId, category, themeId, instagram, timezone, hours, orderLeadDays, professionals, services, logoFile, coverFile, emailVerificationSkipped, emailVerificationSkippedReason }) {
     await ensureReady();
     const currentUser = FB.auth && FB.auth.currentUser;
     if (!currentUser) throw new Error("Usuário não autenticado. Faça login para continuar.");
@@ -473,6 +473,7 @@
         email, address: address || "", city: "", neighborhood: "", instagram: instagram || "",
         open: h.open || "09:00", close: h.close || "19:00", lunchStart: h.lunchStart || "12:00", lunchEnd: h.lunchEnd || "13:00",
         workDays: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6],
+        orderLeadDays: Math.max(0, Math.min(30, +orderLeadDays || 0)),
         timezone: timezone || "America/Sao_Paulo",
         slotInterval: 30, status: "active", planId: billingPlanId, freeBookingLimit: billingPlanId === "free" ? 3 : null, rating: 0, createdAt: nowMs,
         ...emailVerificationPatch,
@@ -533,7 +534,7 @@
   };
 
   // ---------------- CADASTRO DO DONO (bootstrap no cliente) ----------------
-  window.fbSignUpOwner = async function ({ shopName, ownerName, email, password, phone, whatsapp, address, slugOverride, planId, category, themeId, instagram, timezone, hours, professionals, services, logoFile, coverFile, emailVerificationSkipped, emailVerificationSkippedReason }) {
+  window.fbSignUpOwner = async function ({ shopName, ownerName, email, password, phone, whatsapp, address, slugOverride, planId, category, themeId, instagram, timezone, hours, orderLeadDays, professionals, services, logoFile, coverFile, emailVerificationSkipped, emailVerificationSkippedReason }) {
     await ensureReady();
     window._fbSigningUp = true;
     const allowedPlans = ["trial", "free", "monthly", "annual", "founder"];
@@ -580,6 +581,7 @@
         email, address: address || "", city: "", neighborhood: "", instagram: instagram || "",
         open: h.open || "09:00", close: h.close || "19:00", lunchStart: h.lunchStart || "12:00", lunchEnd: h.lunchEnd || "13:00",
         workDays: Array.isArray(h.days) && h.days.length ? h.days : [1, 2, 3, 4, 5, 6],
+        orderLeadDays: Math.max(0, Math.min(30, +orderLeadDays || 0)),
         timezone: timezone || "America/Sao_Paulo",
         slotInterval: 30, status: "active", planId: billingPlanId, freeBookingLimit: billingPlanId === "free" ? 3 : null, rating: 0, createdAt: nowMs,
         ...emailVerificationPatch,

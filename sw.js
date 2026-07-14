@@ -2,7 +2,7 @@
    Estratégia online-first: não guarda shell/código em cache.
    O Firestore é a fonte de verdade; cada navegação deve buscar a versão atual.
 */
-const VERSION = 'groomin-live-v24';
+const VERSION = 'groomin-live-v26';
 
 const OFFLINE_HTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sem conexão — Groomin</title>
@@ -39,7 +39,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Navegações, JS e CSS: sempre rede, sem cache do navegador/SW.
+  // Requisições cross-origin (SDK do Firebase no gstatic, googleapis, Stripe,
+  // fontes, etc.): NÃO interceptar — deixa o navegador buscar nativamente.
+  // Reconstruir uma Request cross-origin aqui quebra imports de módulo ESM.
+  if (url.origin !== self.location.origin) return;
+
+  // Navegações, JS e CSS do próprio site: sempre rede, sem cache do navegador/SW.
   if (req.mode === 'navigate' || url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
     event.respondWith(
       fetch(new Request(req, { cache: 'no-store' }))

@@ -13,7 +13,8 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");
-const functions = require("firebase-functions");
+// v1 explícito: trigger de exclusão de conta Auth ainda não existe na API v2
+const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -446,6 +447,14 @@ exports.createPublicBooking = onCall({ ...callableOptions, secrets: [RESEND_API_
   }
   if (tenant.schedulePaused) {
     throw new HttpsError("failed-precondition", "Agenda pausada.");
+  }
+  const leadDays = Math.max(0, Math.min(30, Number(tenant.orderLeadDays || 0)));
+  if (leadDays > 0) {
+    const now = new Date();
+    const minDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + leadDays);
+    if (new Date(`${date}T00:00:00`) < minDay) {
+      throw new HttpsError("failed-precondition", `Pedidos precisam de pelo menos ${leadDays} dia(s) de antecedência.`);
+    }
   }
   const svcSnap = await db.doc(`tenants/${tenantId}/services/${serviceId}`).get();
   const barberSnap = await db.doc(`tenants/${tenantId}/barbers/${barberId}`).get();

@@ -227,6 +227,8 @@ function instagramDisplay(v){const u=normalizeInstagram(v);return u?`@${u}`:'';}
 const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DOW_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 const MON=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const ORDER_LEAD_OPTIONS=[[0,'No mesmo dia'],[1,'1 dia (pedido hoje, entrega amanhã)'],[2,'2 dias'],[3,'3 dias'],[5,'5 dias'],[7,'7 dias']];
+function shopLeadDays(shop){return Math.max(0,Math.min(30,+((shop&&shop.orderLeadDays)||0)));}
 function tsToDate(v){if(!v)return null;if(typeof v==='number')return new Date(v);if(typeof v==='object'&&v.toDate)return v.toDate();const d=new Date(v+'T00:00:00');return isNaN(d)?null:d;}
 function fmtDate(iso){const d=tsToDate(iso);if(!d)return'';return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;}
 function tsToISO(v){const d=tsToDate(v);if(!d)return null;return d.toISOString().slice(0,10);}

@@ -22,8 +22,8 @@ window.FIREBASE_CONFIG = {
 // VAPID key para Web Push (opcional — Console → Cloud Messaging → Web Push certificates)
 window.FCM_VAPID_KEY = "";
 
-// Stripe (teste). A chave publicável pode ficar no cliente; a secreta fica somente nas Cloud Functions.
-window.STRIPE_PUBLIC_KEY = "pk_test_51TmdGyCfwIrmI2EPVhYnSpnfZBDmkoe3q55J59XYBLHkmTwlZ9YIw0urISw1br6a1BMrCl6Jfg4xZE9EwoSbLWjP00nfASlaYy";
+// Stripe (PRODUÇÃO/live). A chave publicável pode ficar no cliente; a secreta fica somente nas Cloud Functions.
+window.STRIPE_PUBLIC_KEY = "pk_live_51TpWq13G49FJ9KUOKiPIbALvTPWxKOKoiZkKM9KpkPKVRYuMdPnEcgo9kwqAexNWf8iihnThRYbYPvQ54qvSOTb500xjmAXSBG";
 
 // App Check (Firebase Console → App Check → Web app → reCAPTCHA Enterprise/v3).
 // Preencha com a site key e publique novamente; vazio mantém compatibilidade durante setup.
