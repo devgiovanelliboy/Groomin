@@ -19,6 +19,7 @@ const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 const Stripe = require("stripe");
 
 // Teto global de instâncias: impede escala descontrolada (bug/bot/pico) de gerar custo alto.
@@ -108,6 +109,70 @@ const sameOrFutureDate = (date) => {
   const local = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   return new Date(`${date}T00:00:00`) >= local;
 };
+const fmtDateBR = (iso) => {
+  const d = new Date(`${iso}T00:00:00`);
+  const dows = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+  return `${dows[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+// Notifica o dono sobre novo agendamento: push (FCM) + e-mail (Resend).
+// Best-effort: falha de notificação nunca falha o agendamento.
+const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+async function notifyOwnerNewBooking(tenantId, tenant, info) {
+  const when = `${fmtDateBR(info.date)} às ${info.time}`;
+  const title = "💈 Novo agendamento!";
+  const bodyTxt = `${info.customerName} — ${info.serviceName}, ${when}`;
+  try {
+    const ownerUid = tenant.ownerUid;
+    if (ownerUid) {
+      const uSnap = await db.doc(`users/${ownerUid}`).get();
+      const tokens = uSnap.exists && Array.isArray(uSnap.data().fcmTokens)
+        ? uSnap.data().fcmTokens.filter((t) => typeof t === "string" && t) : [];
+      if (tokens.length) {
+        const res = await getMessaging().sendEachForMulticast({
+          tokens,
+          webpush: {
+            notification: { title, body: bodyTxt, icon: publicUrl("/assets/pwa/logo-mark-192.png") },
+            fcmOptions: { link: publicUrl("/app/#/dashboard/agenda") },
+          },
+        });
+        const dead = [];
+        res.responses.forEach((r, i) => {
+          const code = (r.error && r.error.code) || "";
+          if (/registration-token-not-registered|invalid-argument/.test(code)) dead.push(tokens[i]);
+        });
+        if (dead.length) {
+          await db.doc(`users/${ownerUid}`).set({ fcmTokens: FieldValue.arrayRemove(...dead) }, { merge: true });
+        }
+      }
+    }
+  } catch (e) { console.warn("[notifyOwner] push falhou:", e.message); }
+  try {
+    if (tenant.email) {
+      const { Resend } = require("resend");
+      const resend = new Resend(RESEND_API_KEY.value());
+      const agendaUrl = publicUrl("/app/#/dashboard/agenda");
+      const { error } = await resend.emails.send({
+        from: EMAIL_FROM,
+        to: tenant.email,
+        subject: `💈 Novo agendamento: ${info.customerName} — ${when}`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;color:#1a1a1a">
+          <div style="margin-bottom:20px"><span style="font-size:20px;font-weight:800;color:#7c3aed">Groomin</span></div>
+          <h2 style="margin:0 0 8px;font-size:22px">Novo agendamento em ${escHtml(tenant.name || "sua página")}!</h2>
+          <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:15px;color:#333">
+            <tr><td style="padding:8px 0;color:#888">Cliente</td><td style="padding:8px 0;text-align:right"><b>${escHtml(info.customerName)}</b></td></tr>
+            <tr><td style="padding:8px 0;color:#888">WhatsApp</td><td style="padding:8px 0;text-align:right"><b>${escHtml(info.phone || "-")}</b></td></tr>
+            <tr><td style="padding:8px 0;color:#888">${tenant.category === "food" ? "Produto" : "Serviço"}</td><td style="padding:8px 0;text-align:right"><b>${escHtml(info.serviceName)}</b></td></tr>
+            <tr><td style="padding:8px 0;color:#888">${tenant.category === "food" ? "Entrega" : "Horário"}</td><td style="padding:8px 0;text-align:right"><b>${when}</b></td></tr>
+            ${info.barberName ? `<tr><td style="padding:8px 0;color:#888">Profissional</td><td style="padding:8px 0;text-align:right"><b>${escHtml(info.barberName)}</b></td></tr>` : ""}
+          </table>
+          <a href="${agendaUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px">Abrir minha agenda</a>
+        </div>`,
+      });
+      if (error) console.warn("[notifyOwner] e-mail falhou:", JSON.stringify(error));
+    }
+  } catch (e) { console.warn("[notifyOwner] e-mail falhou:", e.message); }
+}
 const resendErrorToHttps = (error, context) => {
   console.warn(`[Groomin] Resend ${context} error:`, JSON.stringify(error));
   const msg = String((error && error.message) || "");
@@ -563,6 +628,13 @@ exports.createPublicBooking = onCall({ ...callableOptions, secrets: [RESEND_API_
       time: Date.now(),
     });
     return { appointmentId: aRef.id, customerId };
+  });
+
+  // Notifica o dono (push + e-mail) — precisa de await: trabalho em background
+  // morre quando a function responde.
+  await notifyOwnerNewBooking(tenantId, tenant, {
+    customerName: name, phone, date, time,
+    serviceName: svc.name || "Serviço", barberName: barber.name || "",
   });
 
   // E-mail de conversão do trial para o dono: aviso no penúltimo e no último agendamento grátis.

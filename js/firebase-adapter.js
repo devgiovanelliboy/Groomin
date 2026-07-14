@@ -128,6 +128,15 @@
     await ensureReady();
     await F.setDoc(F.doc(FB.db, "tenants", tid), clean(data || {}), { merge: true });
   };
+  // Registra token de push (FCM) no doc do usuário; a function de booking lê daqui.
+  window.fbSavePushToken = async function (token) {
+    await ensureReady();
+    const user = FB.auth.currentUser;
+    if (!user || !token) return;
+    await F.setDoc(F.doc(FB.db, "users", user.uid), {
+      fcmTokens: F.arrayUnion(token), fcmUpdatedAt: Date.now(),
+    }, { merge: true });
+  };
   window.fbLoadPlatformSettings = async function () {
     await ensureReady();
     const snap = await F.getDoc(F.doc(FB.db, "platformSettings", "plans"));

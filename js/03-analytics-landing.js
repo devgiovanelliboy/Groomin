@@ -1494,7 +1494,7 @@ function submitOnboarding(){
   const btn=$('#onb_submit');const origBtnHTML=btn?btn.innerHTML:null;
   if(btn){btn.disabled=true;btn.innerHTML='Publicando seu site...';}
   setupFn({shopName:onbData.shopName,ownerName:onbData.name,email:onbData.email,password:onbData.pass,phone:onbData.phone,whatsapp:onbData.whatsapp,address:onbData.address||'',slugOverride:onbData.shopSlug,planId:onbData.planId,category:onbData.category,themeId:onbData.themeId,instagram:onbData.instagram,timezone:onbData.timezone,hours:onbData.hours,orderLeadDays:onbData.category==='food'?(onbData.orderLeadDays??1):0,professionals:onbData.professionals,services:onbData.services,logoFile:onbData.logoFile,coverFile:onbData.coverFile,emailVerificationSkipped:!!onbData.emailVerificationSkipped,emailVerificationSkippedReason:onbData.emailVerificationSkippedReason||''})
-    .then(()=>{onbClearDraft();closeModal();toast('Página publicada com sucesso!','ok');})
+    .then(()=>{onbClearDraft();closeModal();try{sessionStorage.setItem('groomin_sharekit','1');}catch(_){}toast('Página publicada com sucesso!','ok');})
     .catch(err=>{console.error('[Groomin] signup publish:',err&&err.code||'',err&&err.message||err);if(btn&&origBtnHTML){btn.disabled=false;btn.innerHTML=origBtnHTML;}toast(fbErrMsg(err,'signup'),'err');});
 }
 

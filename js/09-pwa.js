@@ -36,6 +36,8 @@
   // Habilitar notificações push (FCM) — chamado sob demanda quando o Firebase está ligado
   window.enablePush=async function(){
     if(!window.__FB_ENABLED||!window.FB||!window.FB.app){toast('Conecte o Firebase para ativar notificações.','info');return;}
+    if(!window.FCM_VAPID_KEY){toast('Notificações ainda não estão disponíveis. Tente novamente em breve.','info');return;}
+    if(!('Notification' in window)){toast('Este navegador não suporta notificações. No iPhone, adicione o Groomin à Tela de Início primeiro.','info');return;}
     try{
       const perm=await Notification.requestPermission();
       if(perm!=='granted'){toast('Permissão de notificações negada.','err');return;}
@@ -44,10 +46,15 @@
       const messaging=m.getMessaging(FB.app);
       const reg=await navigator.serviceWorker.ready;
       const token=await m.getToken(messaging,{vapidKey:window.FCM_VAPID_KEY,serviceWorkerRegistration:reg});
-      if(token){toast('Notificações ativadas neste dispositivo.','ok');
+      if(token){
+        if(window.fbSavePushToken)await fbSavePushToken(token);
+        try{localStorage.setItem('groomin_push_enabled','1');}catch(e){}
+        toast('Notificações ativadas neste dispositivo. 🔔','ok');
         // mensagens em primeiro plano
         m.onMessage(messaging,(payload)=>{const n=(payload&&payload.notification)||{};toast((n.title?n.title+': ':'')+(n.body||'Nova notificação'),'info');});
+        if(window.refreshShell)refreshShell();
         return token;}
+      toast('Não foi possível ativar as notificações.','err');
     }catch(e){console.warn('push',e);toast('Não foi possível ativar as notificações.','err');}
   };
   // Botão de instalação (Android/desktop via beforeinstallprompt)

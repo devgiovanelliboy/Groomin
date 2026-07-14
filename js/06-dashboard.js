@@ -155,13 +155,39 @@ function groomQR(slug,shopName){
 }
 
 /* ---------- Overview ---------- */
+function pushEnableCard(){
+  if(!window.__FB_ENABLED||!window.FCM_VAPID_KEY)return '';
+  if(!('Notification' in window)||Notification.permission==='granted')return '';
+  return `<div class="insight pos" style="margin:14px 0"><span class="ii">${icon('bell')}</span><div><b>Seja avisado na hora de cada agendamento</b><p>Receba uma notificação no celular ou computador sempre que um cliente agendar pelo seu link.</p></div><button class="btn btn-primary btn-sm" onclick="enablePush()">${icon('bell')} Ativar notificações</button></div>`;
+}
+function openShareKit(){
+  const shop=dashShop();if(!shop)return;
+  const url=shopPublicUrl(shop.slug);
+  const isFood=shop.category==='food';
+  const waText=encodeURIComponent(`${isFood?'Agora você pode encomendar online!':'Agora você pode agendar online!'} ${shop.name}: ${url}`);
+  openModal(`<div class="modal-head"><div><h3>🎉 Sua página está no ar!</h3><div class="sub">Divulgue agora para os clientes começarem a ${isFood?'encomendar':'agendar'}</div></div><button class="close-x" onclick="closeModal()">${icon('x')}</button></div>
+  <div class="modal-body" style="text-align:center">
+    <div style="background:#fff;padding:16px;border-radius:12px;display:inline-block;margin-bottom:12px">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&color=0f0f0f&bgcolor=ffffff" alt="QR Code" style="width:180px;height:180px;display:block" />
+    </div>
+    <p class="muted" style="font-size:13px;margin-bottom:14px">${escapeHtml(url)}</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:16px">
+      <a class="btn btn-primary" href="https://wa.me/?text=${waText}" target="_blank" rel="noopener">${icon('whatsapp')} Enviar no WhatsApp</a>
+      <button class="btn btn-ghost" onclick="groomCopyUrl('${shop.slug}')">${icon('copy')} Copiar link</button>
+      <a class="btn btn-ghost" href="https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(url)}" download="qrcode-${shop.slug}.png" target="_blank" rel="noopener">${icon('download')} Baixar QR para imprimir</a>
+    </div>
+    <div class="insight pos" style="text-align:left"><span class="ii">${icon('megaphone')}</span><div><b>Dica: poste nos Stories e cole o QR no balcão</b><p>Quem escaneia o código cai direto na sua página. Marque o link também na bio do Instagram.</p></div></div>
+  </div>`);
+}
 function dashOverview(shop){
   const a=shopAnalytics(shop.id);
   const todayList=a.today.filter(x=>x.status!=='cancelado').sort((x,y)=>x.time.localeCompare(y.time));
   const now=new Date(),today=DB.todayISO(),nowMin=now.getHours()*60+now.getMinutes();
   const upcoming=a.upcoming.filter(x=>x.status!=='cancelado'&&(x.date>today||(x.date===today&&timeToMin(x.time)>=nowMin))).slice(0,8);
   const apptMini=(ap)=>{const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);return `<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('calendar')}</span><div><b>${escapeHtml(ap.customerName||'Cliente')}</b><br><small>${fmtDateShort(ap.date)} · ${ap.time} · ${s?escapeHtml(s.name):'Serviço'}${b?' · '+escapeHtml(b.name.split(' ')[0]):''}</small></div><span class="badge ${STATUS[ap.status].cls}" style="margin-left:auto">${STATUS[ap.status].label}</span></div>`;};
+  if(sessionStorage.getItem('groomin_sharekit')){sessionStorage.removeItem('groomin_sharekit');setTimeout(()=>window.openShareKit&&openShareKit(),400);}
   return `${bookingUrlCard(shop)}
+  ${pushEnableCard()}
   ${shop.schedulePaused?`<div class="insight warn" style="margin-bottom:14px"><span class="ii">${icon('clock')}</span><div><b>Agenda pausada</b><p>Clientes veem "Agenda pausada" e não conseguem criar novos agendamentos.</p></div><button class="btn btn-primary btn-sm" onclick="toggleSchedulePause()">${icon('play')} Retomar</button></div>`:''}
   <div class="stat-grid">
     ${statCard('c1','calendar','Agendamentos de hoje',todayList.length,'')}
@@ -215,7 +241,7 @@ function dashAgenda(shop){
       const bls=blocks.filter(x=>x.barberId===b.id);
       return `<div class="panel" style="margin:0"><div class="panel-head" style="margin-bottom:12px"><div class="t-user"><div class="av">${initials(b.name)}</div><div><b>${escapeHtml(b.name.split(' ')[0])}</b><small>${b.start}–${b.end}</small></div></div></div>
         ${bls.map(x=>`<div class="cal-event blocked"><div><b>${x.fullDay?'Dia bloqueado':x.start+'–'+x.end}</b><small>${escapeHtml(x.reason||'Bloqueio')}</small></div>${canManage?`<button class="ra del" title="Desbloquear" onclick="event.stopPropagation();removeBlock('${x.id}')">${icon('unlock')}</button>`:''}</div>`).join('')}
-        ${evs.length?evs.map(ap=>{const s=DB.find('services',ap.serviceId);return `<div class="cal-event s-${ap.status}" onclick="apptForm('${ap.id}')"><b>${ap.time} · ${s?escapeHtml(s.name):''}</b><small>${escapeHtml(ap.customerName)}</small></div>`;}).join(''):(bls.length?'':`<p class="muted" style="font-size:13px;text-align:center;padding:14px 0">Livre</p>`)}
+        ${evs.length?evs.map(ap=>{const s=DB.find('services',ap.serviceId);return `<div class="cal-event s-${ap.status}" onclick="apptForm('${ap.id}')"><div><b>${ap.time} · ${s?escapeHtml(s.name):''}</b><small>${escapeHtml(ap.customerName)}</small></div>${ap.status!=='cancelado'&&ap.status!=='concluido'?`<button class="ra" title="Lembrar cliente no WhatsApp" onclick="event.stopPropagation();apptReminderWa('${ap.id}')">${icon('whatsapp')}</button>`:''}</div>`;}).join(''):(bls.length?'':`<p class="muted" style="font-size:13px;text-align:center;padding:14px 0">Livre</p>`)}
       </div>`;}).join('')||emptyState('users','Sem profissionais','Cadastre profissionais para ver a agenda.','Adicionar profissional','barberForm()')}</div>`;
   }
   return `<div class="page-head"><div><h2>Agenda</h2><p>${shop.schedulePaused?'Agenda pausada · ':''}${dayAppts.filter(a=>a.status!=='cancelado').length} agendamento(s) em ${fmtDate(agendaDate)}</p></div>
@@ -231,11 +257,25 @@ function dashAgenda(shop){
   </div>
   ${body}`;
 }
+function apptReminderWa(id){
+  const ap=DB.find('appointments',id);if(!ap)return;
+  const shop=dashShop();const s=DB.find('services',ap.serviceId);
+  let d=(ap.phone||'').replace(/\D/g,'');
+  if(!d){toast('Este agendamento não tem telefone cadastrado.','err');return;}
+  if(d.length>=10&&d.length<=11)d='55'+d;
+  const firstName=(ap.customerName||'').trim().split(' ')[0]||'cliente';
+  const isFood=shop&&shop.category==='food';
+  const when=`${fmtDate(ap.date)} às ${ap.time}`;
+  const txt=encodeURIComponent(isFood
+    ?`Oi ${firstName}! Passando para lembrar da sua encomenda na ${shop.name}: ${when}${s?` (${s.name})`:''}. Até lá! 😊`
+    :`Oi ${firstName}! Passando para lembrar do seu horário na ${shop.name}: ${when}${s?` (${s.name})`:''}. Qualquer imprevisto é só avisar por aqui. Até lá! ✂️`);
+  window.open(`https://wa.me/${d}?text=${txt}`,'_blank','noopener');
+}
 function apptRow(ap){
   const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId),canManage=can('manage_appointments');
   const consumed=(ap.consumption&&ap.consumption.length&&productModuleEnabled('inventory'))?` <span class="badge gold" title="Consumo registrado">${icon('droplet')}</span>`:'';
   const consumeBtn=canManage&&ap.status!=='cancelado'&&can('manage_inventory')&&productModuleEnabled('inventory')?`<button class="ra" title="Registrar consumo de produtos" onclick="consumeForm('${ap.id}')">${icon('droplet')}</button>`:'';
-  return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name):'—'}</td><td>${fmtDate(ap.date)}</td><td>${ap.time}</td><td>${money(ap.price)}${consumed}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td><td><div class="row-actions">${consumeBtn}${canManage&&ap.status!=='concluido'&&ap.status!=='cancelado'?`<button class="ra" title="Concluir" onclick="apptStatus('${ap.id}','concluido')">${icon('check')}</button>`:''}${canManage?`<button class="ra" title="Editar" onclick="apptForm('${ap.id}')">${icon('edit')}</button>`:''}${canManage&&ap.status!=='cancelado'?`<button class="ra del" title="Cancelar" onclick="apptStatus('${ap.id}','cancelado')">${icon('x')}</button>`:''}</div></td></tr>`;
+  return `<tr><td><div class="t-user"><div class="av">${initials(ap.customerName)}</div><div><b>${escapeHtml(ap.customerName)}</b><small>${escapeHtml(ap.phone)}</small></div></div></td><td>${s?escapeHtml(s.name):'—'}</td><td>${b?escapeHtml(b.name):'—'}</td><td>${fmtDate(ap.date)}</td><td>${ap.time}</td><td>${money(ap.price)}${consumed}</td><td><span class="badge ${STATUS[ap.status].cls}">${STATUS[ap.status].label}</span></td><td><div class="row-actions">${ap.status!=='cancelado'&&ap.status!=='concluido'?`<button class="ra" title="Lembrar cliente no WhatsApp" onclick="apptReminderWa('${ap.id}')">${icon('whatsapp')}</button>`:''}${consumeBtn}${canManage&&ap.status!=='concluido'&&ap.status!=='cancelado'?`<button class="ra" title="Concluir" onclick="apptStatus('${ap.id}','concluido')">${icon('check')}</button>`:''}${canManage?`<button class="ra" title="Editar" onclick="apptForm('${ap.id}')">${icon('edit')}</button>`:''}${canManage&&ap.status!=='cancelado'?`<button class="ra del" title="Cancelar" onclick="apptStatus('${ap.id}','cancelado')">${icon('x')}</button>`:''}</div></td></tr>`;
 }
 function apptStatus(id,status){DB.update('appointments',id,{status});const ap=DB.find('appointments',id);if(status==='cancelado')DB.insert('notifications',{barbershopId:ap.barbershopId,type:'cancel',title:'Cancelamento',msg:`${ap.customerName} — ${fmtDateShort(ap.date)} ${ap.time}`,time:Date.now(),read:false});DB.log(status==='cancelado'?'Agendamento cancelado':'Agendamento concluído',ap.customerName,ap.barbershopId);toast('Status atualizado.',status==='cancelado'?'info':'ok');refreshShell();}
 async function toggleSchedulePause(){
