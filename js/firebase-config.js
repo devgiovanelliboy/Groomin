@@ -19,8 +19,8 @@ window.FIREBASE_CONFIG = {
   measurementId: "G-Y8CSYEGTDL"
 };
 
-// VAPID key para Web Push (opcional — Console → Cloud Messaging → Web Push certificates)
-window.FCM_VAPID_KEY = "";
+// VAPID key para Web Push (Console → Cloud Messaging → Web Push certificates)
+window.FCM_VAPID_KEY = "BOQsP79_Vo1b_5tO8G9OoVTbt9NgYertyGBDEN1u_3ZLKTnEHeuB4x56_2MWUNydcRl4P2tn6K5yc8uUlyQnaiY";
 
 // Stripe (PRODUÇÃO/live). A chave publicável pode ficar no cliente; a secreta fica somente nas Cloud Functions.
 window.STRIPE_PUBLIC_KEY = "pk_live_51TpWq13G49FJ9KUOKiPIbALvTPWxKOKoiZkKM9KpkPKVRYuMdPnEcgo9kwqAexNWf8iihnThRYbYPvQ54qvSOTb500xjmAXSBG";
