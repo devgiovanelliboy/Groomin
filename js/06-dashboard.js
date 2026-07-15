@@ -10,7 +10,8 @@ const BUSINESS_CATEGORIES=[
   ['barbershop','Barbearia'],['hair-salon','Salão de cabelo'],['nail-designer','Nail designer'],['lash-designer','Lash designer'],
   ['makeup-artist','Maquiadora'],['beauty-clinic','Clínica de estética'],['tattoo-studio','Estúdio de tatuagem'],
   ['massage-therapist','Massoterapeuta'],['personal-trainer','Personal trainer'],['nutritionist','Nutricionista'],
-  ['physiotherapist','Fisioterapeuta'],['dentist','Dentista'],['photographer','Fotógrafo'],['consultant','Consultor'],['other','Outro']
+  ['physiotherapist','Fisioterapeuta'],['dentist','Dentista'],['photographer','Fotógrafo'],['consultant','Consultor'],
+  ['food','Alimentos por encomenda'],['car-wash','Lava rápido & automotivo'],['other','Outro']
 ];
 const BUSINESS_THEMES=[
   ['elegant-dark','Elegant Dark'],['luxury-gold','Luxury Gold'],['rose-pink','Rose Pink'],['royal-purple','Royal Purple'],

@@ -135,6 +135,8 @@ const ADMIN_SEGMENT_LABELS={
   'dentist':'Dentista',
   'photographer':'Fotógrafo',
   'consultant':'Consultor',
+  'food':'Alimentos por encomenda',
+  'car-wash':'Lava rápido & automotivo',
   'other':'Outro'
 };
 function adminSegmentLabel(value){return ADMIN_SEGMENT_LABELS[value]||value||'Não informado';}
