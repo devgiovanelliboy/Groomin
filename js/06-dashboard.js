@@ -315,7 +315,7 @@ function saveAppt(id){
   if(name.length<2||phone.length<8){toast('Preencha cliente e telefone.','err');return;}
   const svcId=$('#ap_svc').value,svc=DB.find('services',svcId);const barberId=$('#ap_barber').value;const date=$('#ap_date').value,time=$('#ap_time').value,status=$('#ap_status').value;
   if(!id||status!=='cancelado'){
-    const slot=barberSlots(shop.id,barberId,date,svc.duration).find(s=>s.time===time);
+    const slot=barberSlots(shop.id,barberId,date,svc.duration,id||null).find(s=>s.time===time);
     const s0=timeToMin(time),e0=s0+(svc.duration||30);
     const conflict=DB.scope('appointments',shop.id).some(a=>{if(a.id===id||a.barberId!==barberId||a.date!==date||a.status==='cancelado')return false;const svcA=DB.find('services',a.serviceId);const a0=timeToMin(a.time),a1=a0+(a.duration||(svcA?svcA.duration:30));return s0<a1&&e0>a0;});
     if(conflict||!slot||!slot.available){toast('Este período conflita com outro agendamento ou bloqueio.','err');return;}

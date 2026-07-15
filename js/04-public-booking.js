@@ -18,7 +18,7 @@ function addToCalendar(){
   const a=document.createElement('a');a.href=url;a.download='agendamento.ics';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
-function barberSlots(shopId,barberId,dateISO,duration){
+function barberSlots(shopId,barberId,dateISO,duration,excludeApptId){
   const shop=DB.find('barbershops',shopId);const barber=DB.find('barbers',barberId);
   if(!shop||!barber||!barber.active||shop.schedulePaused)return [];
   const dow=new Date(dateISO+'T00:00:00').getDay();
@@ -34,7 +34,7 @@ function barberSlots(shopId,barberId,dateISO,duration){
   const endM=Math.min(timeToMin(barber.end||dayHours.end),timeToMin(dayHours.end));
   if(startM>=endM)return [];
   const lunchS=timeToMin(barber.lunchStart||shop.lunchStart||'12:00'),lunchE=timeToMin(barber.lunchEnd||shop.lunchEnd||'13:00');
-  const taken=DB.scope('appointments',shopId).filter(a=>a.barberId===barberId&&a.date===dateISO&&a.status!=='cancelado')
+  const taken=DB.scope('appointments',shopId).filter(a=>a.barberId===barberId&&a.date===dateISO&&a.status!=='cancelado'&&a.id!==excludeApptId)
     .map(a=>{const s=DB.find('services',a.serviceId);const m=timeToMin(a.time);return[m,m+(s?s.duration:30)];});
   const blkRanges=blocks.filter(b=>!b.fullDay).map(b=>[timeToMin(b.start),timeToMin(b.end)]);
   const now=new Date();const isToday=dateISO===DB.todayISO();const nowM=now.getHours()*60+now.getMinutes();
