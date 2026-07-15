@@ -209,11 +209,11 @@ function adminShops(){
   </td></tr>`:'';
   return `<div class="page-head"><div><h2>Clientes</h2><p>${shops.length} cliente(s) na plataforma</p></div><div class="page-actions"><button class="btn btn-primary" onclick="adminShopForm()">${icon('plus')} Novo cliente</button></div></div>
   <div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Proprietário</th><th>Segmento</th><th>Plano</th><th>Status</th><th>Criado em</th><th></th></tr></thead><tbody>
-  ${emptyState}${shops.map(s=>{const plan=DB.find('plans',s.planId)||{name:'—',color:'muted'};return `<tr>
+  ${emptyState}${shops.map(s=>{const plan=DB.find('plans',s.planId)||{name:'—',color:'muted'};const activeCourtesy=subscriptionCourtesyActive(adminCourtesySub(s.id));const pName=activeCourtesy?'Plano Cortesia':plan.name;const pColor=activeCourtesy?'gold':plan.color;return `<tr>
     <td><div class="t-user"><div class="av">${initials(s.name)}</div><div><b>${escapeHtml(s.name)}</b><small>/${escapeHtml(s.slug)}</small></div></div></td>
     <td>${escapeHtml(s.ownerName||'—')}</td>
     <td><span class="badge info">${escapeHtml(adminSegmentLabel(s.category))}</span></td>
-    <td><span class="badge ${plan.color}">${plan.name}</span></td>
+    <td><span class="badge ${pColor}">${pName}</span></td>
     <td><span class="badge ${s.status==='active'?'ok':'danger'}">${s.status==='active'?'Ativa':'Suspensa'}</span></td>
     <td>${s.createdAt?fmtDateShort(new Date(s.createdAt).toISOString().slice(0,10)):'—'}</td>
     <td><div class="row-actions">
