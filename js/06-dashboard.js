@@ -184,7 +184,8 @@ function dashOverview(shop){
   const a=shopAnalytics(shop.id);
   const todayList=a.today.filter(x=>x.status!=='cancelado').sort((x,y)=>x.time.localeCompare(y.time));
   const now=new Date(),today=DB.todayISO(),nowMin=now.getHours()*60+now.getMinutes();
-  const upcoming=a.upcoming.filter(x=>x.status!=='cancelado'&&(x.date>today||(x.date===today&&timeToMin(x.time)>=nowMin))).slice(0,8);
+  const upcomingAll=a.upcoming.filter(x=>x.status!=='cancelado'&&x.status!=='concluido'&&(x.date>today||(x.date===today&&timeToMin(x.time)>=nowMin)));
+  const upcoming=upcomingAll.slice(0,8);
   const apptMini=(ap)=>{const s=DB.find('services',ap.serviceId),b=DB.find('barbers',ap.barberId);return `<div class="mini-slot" style="margin:0 0 8px"><span class="ic">${icon('calendar')}</span><div><b>${escapeHtml(ap.customerName||'Cliente')}</b><br><small>${fmtDateShort(ap.date)} · ${ap.time} · ${s?escapeHtml(s.name):'Serviço'}${b?' · '+escapeHtml(b.name.split(' ')[0]):''}</small></div><span class="badge ${STATUS[ap.status].cls}" style="margin-left:auto">${STATUS[ap.status].label}</span></div>`;};
   if(sessionStorage.getItem('groomin_sharekit')){sessionStorage.removeItem('groomin_sharekit');setTimeout(()=>window.openShareKit&&openShareKit(),400);}
   return `${bookingUrlCard(shop)}
@@ -192,7 +193,7 @@ function dashOverview(shop){
   ${shop.schedulePaused?`<div class="insight warn" style="margin-bottom:14px"><span class="ii">${icon('clock')}</span><div><b>Agenda pausada</b><p>Clientes veem "Agenda pausada" e não conseguem criar novos agendamentos.</p></div><button class="btn btn-primary btn-sm" onclick="toggleSchedulePause()">${icon('play')} Retomar</button></div>`:''}
   <div class="stat-grid">
     ${statCard('c1','calendar','Agendamentos de hoje',todayList.length,'')}
-    ${statCard('c2','clock','Próximos agendamentos',a.upcoming.length,'')}
+    ${statCard('c2','clock','Próximos agendamentos',upcomingAll.length,'')}
     ${statCard('c3','users','Clientes',DB.scope('customers',shop.id).length,'')}
     ${statCard('c4','dollar','Receita de hoje',money(a.revToday),'apenas concluídos')}
   </div>
@@ -1094,7 +1095,7 @@ function renderBarber(){
   const t=DB.todayISO();
   const mine=DB.scope('appointments',shop.id).filter(a=>a.barberId===barber.id);
   const today=mine.filter(a=>a.date===t&&a.status!=='cancelado').sort((x,y)=>x.time.localeCompare(y.time));
-  const upcoming=mine.filter(a=>a.date>t&&a.status!=='cancelado').sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+  const upcoming=mine.filter(a=>a.date>t&&a.status!=='cancelado'&&a.status!=='concluido').sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
   const done=mine.filter(a=>a.status==='concluido');
   const revenue=done.reduce((s,a)=>s+a.price,0);const commission=revenue*(barber.commission/100);
   const list=barberTab==='hoje'?today:barberTab==='proximos'?upcoming:mine.slice().sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
