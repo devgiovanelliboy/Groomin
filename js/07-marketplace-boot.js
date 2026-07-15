@@ -9,7 +9,7 @@ function renderMarketplace(){
   const filtered=shops.filter(s=>!q||[s.name,s.city,s.neighborhood,s.description].join(' ').toLowerCase().includes(q)||DB.scope('services',s.id).some(sv=>sv.name.toLowerCase().includes(q)));
   $('#root').innerHTML=`<header class="topbar"><div class="container inner">
     <div class="brand" onclick="Router.go('#/')"><span class="logo">${GROOMIN_LOGO}</span><span>Groomin<small>Encontrar barbearia</small></span></div>
-    <div class="nav-right"><button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button><button class="btn btn-ghost btn-sm" onclick="Router.go('#/')">Início</button></div>
+    <div class="nav-right"><button class="btn btn-ghost btn-sm" onclick="Router.go('#/')">Início</button></div>
   </div></header>
   <main class="container" style="padding:36px 0 60px">
     ${!flags.marketplace?`<div class="insight warn" style="margin-bottom:22px"><span class="ii">${icon('rocket')}</span><div><b>Recurso em pré-lançamento</b><p>O marketplace público está em fase final. A arquitetura multi-tenant já suporta busca por cidade, bairro, serviço e avaliações.</p></div></div>`:''}

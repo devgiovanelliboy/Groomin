@@ -1636,7 +1636,6 @@ function renderLogin(){
     <div class="auth-main"><div class="auth-box">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <button class="btn btn-ghost btn-sm" onclick="Router.go('#/')">${icon('arrowLeft')} Início</button>
-        <button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
       </div>
       <h2>${loginShop?`Entrar na ${escapeHtml(loginShop.name)}`:'Entrar na plataforma'}</h2>
       <p class="sub">${loginShop?'Acesse sua conta de cliente ou painel vinculado a esta barbearia.':'Acesse seu painel. Redirecionamos automaticamente conforme o seu perfil.'}</p>

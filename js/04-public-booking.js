@@ -206,7 +206,6 @@ function publicShell(inner,shop){
   return `<header class="pub-topbar"><div class="container pub-topbar-inner">
     ${brand}
     <div class="pub-nav-actions">
-      <button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
       ${shop?`<button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}')">${icon('calendar')} ${shopIsFood(shop)?'Encomendar':'Agendar'}</button>`:''}
     </div>
   </div></header><main class="pub-main">${inner}</main><footer class="pub-powered">Powered by Groomin</footer>`;
@@ -541,7 +540,7 @@ function renderCustomer(){
   const shopSelector=links.length>1?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${links.map(lk=>{const s=DB.find('barbershops',lk.tenantId);const active=lk.tenantId===u.barbershopId;return s?`<button class="btn btn-sm ${active?'btn-primary':'btn-ghost'}" onclick="switchCustShop('${lk.tenantId}')">${escapeHtml(s.name)}</button>`:'';}).join('')}</div>`:'';
   $('#root').innerHTML=`<header class="topbar"><div class="container inner">
     <div class="brand" onclick="Router.go('#/'+'${shop.slug}')"><span class="logo">${icon('scissors')}</span><span>${escapeHtml(shop.name)}<small>Área do cliente</small></span></div>
-    <div class="nav-right"><button class="theme-toggle" data-theme-ic onclick="toggleTheme()"></button>
+    <div class="nav-right">
       <button class="btn btn-primary btn-sm" onclick="startBooking('${shop.id}')">${icon('plus')} Agendar</button>
       <button class="btn btn-ghost btn-sm" onclick="logoutTo('#/'+'${shop.slug}')">${icon('logout')} Sair</button></div>
   </div>${shopSelector?`<div class="container inner" style="padding-top:0;padding-bottom:8px">${shopSelector}</div>`:''}</header>

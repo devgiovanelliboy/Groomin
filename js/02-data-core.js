@@ -245,10 +245,11 @@ function toast(msg,type='ok'){
   $('#toastWrap').appendChild(el);
   setTimeout(()=>{el.style.transition='.3s';el.style.opacity='0';el.style.transform='translateX(120%)';setTimeout(()=>el.remove(),300);},3200);
 }
-function setTheme(t){document.documentElement.setAttribute('data-theme',t);localStorage.setItem('groomin_theme',t);
-  $$('[data-theme-ic]').forEach(b=>b.innerHTML=icon(t==='dark'?'moon':'sun'));}
-function toggleTheme(){setTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');if(window.__afterTheme)window.__afterTheme();}
-setTheme(localStorage.getItem('groomin_theme')||localStorage.getItem('barberos_theme')||'dark');
+// Modo noturno desativado em todo o site: tema claro sempre.
+function setTheme(t){document.documentElement.setAttribute('data-theme','light');localStorage.setItem('groomin_theme','light');
+  $$('[data-theme-ic]').forEach(b=>b.innerHTML=icon('sun'));}
+function toggleTheme(){setTheme('light');if(window.__afterTheme)window.__afterTheme();}
+setTheme('light');
 
 function openModal(html,size=''){
   const m=$('#modal');m.className='modal '+size;m.innerHTML=html;

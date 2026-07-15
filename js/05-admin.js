@@ -46,7 +46,6 @@ function mountShell(cfg){
         ${cfg.search!==false?`<div class="search-box">${icon('search')}<input type="text" id="shellSearch" placeholder="Buscar..." oninput="shellSearch(this.value)"></div>`:''}
         ${cfg.notif!==false?`<button class="icon-btn" onclick="toggleNotif(event)">${icon('bell')}<span class="ndot" id="notifDot"></span></button>`:''}
         <button class="btn btn-ghost btn-sm app-logout-btn" onclick="doLogout()">${icon('logout')} Sair</button>
-        <button class="icon-btn" data-theme-ic onclick="toggleTheme()"></button>
       </header>
       <div class="notif-pop" id="notifPop"></div>
       <div class="content" id="shellContent">${cfg.content}</div>
