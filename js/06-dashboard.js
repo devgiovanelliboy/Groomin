@@ -3,7 +3,7 @@
    Tenant-isolated by currentShop()
    ============================================================ */
 function dashShop(){const u=Session.effectiveUser;return DB.find('barbershops',u.barbershopId);}
-let agendaDate=null,agendaView='dia',finPeriod='mes',crmSeg='todos',agendaPage=1,crmPage=1;
+let agendaDate=null,agendaView='dia',finPeriod='mes',crmSeg='todos',agendaPage=1,crmPage=1,agendaStatusFilter='all';
 const PAGE_SIZE=30;
 const DASH_CHART_PRIMARY='#7C3AED';
 const BUSINESS_CATEGORIES=[
@@ -233,9 +233,10 @@ function dashAgenda(shop){
   const canManage=can('manage_appointments');
   let body;
   if(agendaView==='lista'){
-    const list=DB.scope('appointments',shop.id).slice().sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
+    const all=DB.scope('appointments',shop.id).slice().sort((x,y)=>(y.date+y.time).localeCompare(x.date+x.time));
+    const list=agendaStatusFilter==='all'?all:all.filter(a=>a.status===agendaStatusFilter);
     const pg=pageSlice(list,agendaPage);agendaPage=pg.page;
-    body=list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Data</th><th>Hora</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${pg.items.map(ap=>apptRow(ap)).join('')}</tbody></table></div>${pageControls(pg,'setAgendaPage')}`:emptyState('calendar','Sem agendamentos','Compartilhe sua página pública para receber reservas.','Copiar link',`groomCopyUrl('${shop.slug}')`);
+    body=list.length?`<div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Data</th><th>Hora</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>${pg.items.map(ap=>apptRow(ap)).join('')}</tbody></table></div>${pageControls(pg,'setAgendaPage')}`:(agendaStatusFilter!=='all'&&all.length?emptyState('calendar','Nada com este status','Nenhum agendamento com o status selecionado.','Ver todos',`agendaStatusFilter='all';agendaPage=1;refreshShell()`):emptyState('calendar','Sem agendamentos','Compartilhe sua página pública para receber reservas.','Copiar link',`groomCopyUrl('${shop.slug}')`));
   }else{
     body=`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${barbers.map(b=>{
       const evs=dayAppts.filter(a=>a.barberId===b.id).sort((x,y)=>x.time.localeCompare(y.time));
@@ -254,7 +255,7 @@ function dashAgenda(shop){
     </div></div>
   <div class="toolbar">
     <div class="seg"><button class="${agendaView==='dia'?'on':''}" onclick="agendaView='dia';refreshShell()">Dia</button><button class="${agendaView==='lista'?'on':''}" onclick="agendaView='lista';agendaPage=1;refreshShell()">Lista</button></div>
-    ${agendaView==='dia'?`<div style="display:flex;gap:8px;align-items:center"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,-1);refreshShell()">${icon('arrowLeft')}</button><input class="input" type="date" style="width:auto" value="${agendaDate}" onchange="agendaDate=this.value;refreshShell()"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,1);refreshShell()">${icon('arrowRight')}</button><button class="btn btn-ghost btn-sm" onclick="agendaDate=DB.todayISO();refreshShell()">Hoje</button></div>`:''}
+    ${agendaView==='dia'?`<div style="display:flex;gap:8px;align-items:center"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,-1);refreshShell()">${icon('arrowLeft')}</button><input class="input" type="date" style="width:auto" value="${agendaDate}" onchange="agendaDate=this.value;refreshShell()"><button class="icon-btn" onclick="agendaDate=DB.addDays(agendaDate,1);refreshShell()">${icon('arrowRight')}</button><button class="btn btn-ghost btn-sm" onclick="agendaDate=DB.todayISO();refreshShell()">Hoje</button></div>`:`<select class="input" style="width:auto" onchange="agendaStatusFilter=this.value;agendaPage=1;refreshShell()">${[['all','Todos os status'],['confirmado','Confirmados'],['pendente','Pendentes'],['concluido','Concluídos'],['cancelado','Cancelados']].map(o=>`<option value="${o[0]}" ${agendaStatusFilter===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>`}
   </div>
   ${body}`;
 }
