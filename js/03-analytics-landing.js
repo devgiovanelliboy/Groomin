@@ -1609,7 +1609,7 @@ function doForgotPassword(){
   if(window.__FB_ENABLED){
     const email=($('#lg_email')||{}).value?.trim().toLowerCase()||'';
     if(!email||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Digite seu e-mail acima para recuperar a senha.','info');if($('#lg_email'))$('#lg_email').focus();return;}
-    fbSendPasswordReset(email).then(()=>toast('Se esse e-mail estiver cadastrado, enviaremos o link de recuperação. Verifique caixa de entrada e spam.','ok')).catch(err=>toast(fbErrMsg(err,'login'),'err'));
+    fbSendPasswordReset(email).then(()=>toast('Se esse e-mail estiver cadastrado, enviaremos o link de recuperação. Verifique caixa de entrada e spam.','ok')).catch(err=>toast((err&&/resource-exhausted/.test(err.code||'')&&err.message)||fbErrMsg(err,'login'),'err'));
   }else{
     toast('Enviamos um link de recuperação para o seu e-mail.','info');
   }

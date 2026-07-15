@@ -319,10 +319,26 @@
       : `https://${cfg.authDomain || "groomin-952d0.web.app"}`;
     return `${origin}${path || "/app/#/login"}`;
   }
-  window.fbSendPasswordReset = (email) => A.sendPasswordResetEmail(FB.auth, email, {
-    url: authActionUrl("/app/#/login"),
-    handleCodeInApp: false,
-  });
+  window.fbSendPasswordReset = async function (email) {
+    await ensureReady();
+    // E-mail próprio via Resend (pt-BR, remetente mail.groomin.com.br — não cai no spam).
+    // Fallback: e-mail padrão do Firebase Auth se a function estiver indisponível.
+    if (FN && FB.functions) {
+      try {
+        const call = FN.httpsCallable(FB.functions, "sendPasswordReset");
+        await call({ email });
+        return;
+      } catch (err) {
+        const code = String((err && err.code) || "");
+        if (/resource-exhausted|invalid-argument/.test(code)) throw err;
+        console.warn("[Groomin] sendPasswordReset function falhou, usando fallback:", code, err && err.message);
+      }
+    }
+    await A.sendPasswordResetEmail(FB.auth, email, {
+      url: authActionUrl("/app/#/login"),
+      handleCodeInApp: false,
+    });
+  };
   window.fbCreateStripeCheckout = async function (payload) {
     await ensureReady();
     if (!FN || !FB.functions) throw new Error("Functions indisponível.");

@@ -1009,7 +1009,7 @@ exports.toggleCourtesyPlan = onCall({ ...callableOptions, secrets: [STRIPE_SECRE
       tenantId,
       barbershopId: tenantId,
       actorName: caller.name || caller.email || "Super Admin",
-      role: caller.role,
+      role: caller.role || "super_admin",
       action: activate ? "Plano Cortesia ativado" : "Plano Cortesia removido",
       target: tenant.name || tenantId,
       time: now,
@@ -1216,6 +1216,68 @@ const emailOtpDocId = (email) => {
   const crypto = require("crypto");
   return crypto.createHash("sha256").update(normalizeEmail(email)).digest("hex");
 };
+
+// ------------------------------------------------------------
+// 11b) Recuperação de senha via Resend — o e-mail padrão do Firebase
+//      (noreply@<projeto>.firebaseapp.com, em inglês) cai no spam.
+//      Gera o link oficial via Admin SDK e envia com remetente próprio,
+//      apontando para a página custom /auth/action. Resposta idêntica
+//      exista ou não a conta (não revela cadastro).
+// ------------------------------------------------------------
+exports.sendPasswordReset = onCall({ ...callableOptions, secrets: [RESEND_API_KEY] }, async (request) => {
+  const email = normalizeEmail(request.data && request.data.email);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new HttpsError("invalid-argument", "E-mail inválido.");
+  }
+  // Rate-limit por e-mail (mesmo padrão do OTP): 60s entre envios
+  const rlRef = db.doc(`passwordResets/${emailOtpDocId(email)}`);
+  const rlSnap = await rlRef.get();
+  if (rlSnap.exists) {
+    const prev = rlSnap.data();
+    const prevAt = prev.createdAt && prev.createdAt.toMillis ? prev.createdAt.toMillis() : 0;
+    if (Date.now() - prevAt < 60 * 1000) {
+      throw new HttpsError("resource-exhausted", "Aguarde 60 segundos antes de pedir um novo link.");
+    }
+  }
+  await rlRef.set({ createdAt: FieldValue.serverTimestamp() }, { merge: true });
+
+  let link = "";
+  try {
+    link = await auth.generatePasswordResetLink(email, { url: publicUrl("/app/#/login") });
+  } catch (err) {
+    if (err.code === "auth/user-not-found" || /USER_NOT_FOUND|EMAIL_NOT_FOUND/i.test(err.message || "")) {
+      return { sent: true }; // resposta idêntica: não revela se o e-mail existe
+    }
+    console.warn("[sendPasswordReset] generateLink falhou:", err.code || "", err.message);
+    throw new HttpsError("internal", "Não foi possível gerar o link. Tente novamente.");
+  }
+
+  // Reaponta para a página custom /auth/action mantendo oobCode e continueUrl
+  try {
+    const u = new URL(link);
+    link = publicUrl(`/auth/action?${u.searchParams.toString()}`);
+  } catch (_) { /* mantém o link original do Firebase */ }
+
+  const { Resend } = require("resend");
+  const resend = new Resend(RESEND_API_KEY.value());
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: email,
+    subject: "Redefinir sua senha do Groomin",
+    html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;color:#1a1a1a">
+      <div style="margin-bottom:20px"><span style="font-size:20px;font-weight:800;color:#7c3aed">Groomin</span></div>
+      <h2 style="margin:0 0 8px;font-size:22px">Redefinir senha</h2>
+      <p style="color:#555;margin:0 0 28px;line-height:1.6">Recebemos um pedido para redefinir a senha da sua conta. Clique no botão abaixo para criar uma nova senha. O link vale por 1 hora.</p>
+      <a href="${link}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px">Criar nova senha</a>
+      <p style="color:#888;font-size:13px;margin:28px 0 0">Se você não pediu a redefinição, pode ignorar este e-mail — sua senha continua a mesma.</p>
+    </div>`,
+  });
+  if (error) {
+    console.warn("[sendPasswordReset] Resend falhou:", JSON.stringify(error));
+    throw new HttpsError("internal", "Não foi possível enviar o e-mail. Tente novamente.");
+  }
+  return { sent: true };
+});
 
 exports.sendSignupVerificationCode = onCall({ ...callableOptions, secrets: [RESEND_API_KEY] }, async (request) => {
   const email = normalizeEmail(request.data && request.data.email);
