@@ -120,7 +120,7 @@ const fmtDateBR = (iso) => {
 const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 async function notifyOwnerNewBooking(tenantId, tenant, info) {
   const when = `${fmtDateBR(info.date)} às ${info.time}`;
-  const title = "💈 Novo agendamento!";
+  const title = "🗓️ Novo agendamento!";
   const bodyTxt = `${info.customerName} — ${info.serviceName}, ${when}`;
   try {
     const ownerUid = tenant.ownerUid;
@@ -155,7 +155,7 @@ async function notifyOwnerNewBooking(tenantId, tenant, info) {
       const { error } = await resend.emails.send({
         from: EMAIL_FROM,
         to: tenant.email,
-        subject: `💈 Novo agendamento: ${info.customerName} — ${when}`,
+        subject: `🗓️ Novo agendamento: ${info.customerName} — ${when}`,
         html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;color:#1a1a1a">
           <div style="margin-bottom:20px"><span style="font-size:20px;font-weight:800;color:#7c3aed">Groomin</span></div>
           <h2 style="margin:0 0 8px;font-size:22px">Novo agendamento em ${escHtml(tenant.name || "sua página")}!</h2>
